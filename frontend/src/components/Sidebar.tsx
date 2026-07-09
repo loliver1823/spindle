@@ -8,7 +8,7 @@ import { FileTextIcon, type FileTextIconHandle } from "@/components/ui/file-text
 import { BugReportIcon } from "@/components/ui/bug-report-icon";
 import { AudioLinesIcon, type AudioLinesIconHandle } from "@/components/ui/audio-lines";
 import { ToolCaseIcon } from "@/components/ui/tool-case";
-import { Library, ListMusic, Download, ListOrdered } from "lucide-react";
+import { Library, Download, ListOrdered } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -85,17 +85,6 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
                     </TooltipTrigger>
                     <TooltipContent side="right">
                         <p>Download</p>
-                    </TooltipContent>
-                </Tooltip>
-
-                <Tooltip delayDuration={0}>
-                    <TooltipTrigger asChild>
-                        <Button variant={currentPage === "playlist-sync" ? "secondary" : "ghost"} size="icon" className={`h-10 w-10 ${currentPage === "playlist-sync" ? "bg-primary/10 text-primary hover:bg-primary/20" : "hover:bg-primary/10 hover:text-primary"}`} onClick={() => onPageChange("playlist-sync")}>
-                            <ListMusic size={20}/>
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">
-                        <p>Playlist Sync</p>
                     </TooltipContent>
                 </Tooltip>
 

@@ -17,7 +17,6 @@ import { AlbumInfo } from "@/components/AlbumInfo";
 import { PlaylistInfo } from "@/components/PlaylistInfo";
 import { ArtistInfo } from "@/components/ArtistInfo";
 import { DownloadQueue, QueuePage } from "@/components/DownloadQueue";
-import { DownloadProgressToast } from "@/components/DownloadProgressToast";
 import { CooldownBanner } from "@/components/CooldownBanner";
 import { AudioAnalysisPage } from "@/components/AudioAnalysisPage";
 import { AudioConverterPage } from "@/components/AudioConverterPage";
@@ -261,14 +260,17 @@ function App() {
                 setCurrentPage(origin);
         };
         const onOpenLibrary = () => setCurrentPage("library");
+        const onOpenQueue = () => downloadQueue.openQueue();
         window.addEventListener("spindle:open-playlist-sync", onOpenPlaylistSync);
         window.addEventListener("spindle:playlist-sync-back", onPlaylistSyncBack);
         window.addEventListener("spindle:open-library", onOpenLibrary);
+        window.addEventListener("spindle:open-queue", onOpenQueue);
         return () => {
             window.removeEventListener("spindle:fetch-url", onFetch);
             window.removeEventListener("spindle:open-playlist-sync", onOpenPlaylistSync);
             window.removeEventListener("spindle:playlist-sync-back", onPlaylistSyncBack);
             window.removeEventListener("spindle:open-library", onOpenLibrary);
+            window.removeEventListener("spindle:open-queue", onOpenQueue);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -358,7 +360,7 @@ function App() {
             const { playlist_info, track_list } = metadata.metadata;
             const settings = getSettings();
             const playlistFolderName = buildPlaylistFolderName(playlist_info.owner.name, playlist_info.owner.display_name, settings.playlistOwnerFolderName);
-            return (<PlaylistInfo playlistInfo={playlist_info} trackList={track_list} searchQuery={searchQuery} sortBy={sortBy} selectedTracks={selectedTracks} downloadedTracks={download.downloadedTracks} failedTracks={download.failedTracks} skippedTracks={download.skippedTracks} downloadingTrack={download.downloadingTrack} isDownloading={download.isDownloading} bulkDownloadType={download.bulkDownloadType} downloadProgress={download.downloadProgress} downloadRemainingCount={download.downloadRemainingCount} currentDownloadInfo={download.currentDownloadInfo} currentPage={currentListPage} itemsPerPage={ITEMS_PER_PAGE} downloadedLyrics={lyrics.downloadedLyrics} failedLyrics={lyrics.failedLyrics} skippedLyrics={lyrics.skippedLyrics} downloadingLyricsTrack={lyrics.downloadingLyricsTrack} checkingAvailabilityTrack={availability.checkingTrackId} availabilityMap={availability.availabilityMap} downloadedCovers={cover.downloadedCovers} failedCovers={cover.failedCovers} skippedCovers={cover.skippedCovers} downloadingCoverTrack={cover.downloadingCoverTrack} isBulkDownloadingCovers={cover.isBulkDownloadingCovers} isBulkDownloadingLyrics={lyrics.isBulkDownloadingLyrics} isMetadataLoading={metadata.loading} onSearchChange={handleSearchChange} onSortChange={setSortBy} onToggleTrack={toggleTrackSelection} onToggleSelectAll={toggleSelectAll} onSelectTrackRange={selectTrackRange} onDownloadTrack={download.handleDownloadTrack} onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position, albumArtist, releaseDate, discNumber) => lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, playlistFolderName, position, albumArtist, releaseDate, discNumber)} onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, _isArtistDiscography, position, trackId, albumArtist, releaseDate, discNumber) => cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, playlistFolderName, position, trackId, albumArtist, releaseDate, discNumber)} onCheckAvailability={availability.checkAvailability} onDownloadAllLyrics={() => lyrics.handleDownloadAllLyrics(track_list, playlistFolderName)} onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, playlistFolderName)} onDownloadAll={() => download.handleDownloadAll(track_list, playlistFolderName)} onDownloadSelected={() => download.handleDownloadSelected(selectedTracks, track_list, playlistFolderName)} onStopDownload={download.handleStopDownload} onOpenFolder={handleOpenFolder} onPageChange={setCurrentListPage} onBack={handleMetadataBack} onAlbumClick={metadata.handleAlbumClick} onArtistClick={async (artist) => {
+            return (<PlaylistInfo playlistInfo={playlist_info} trackList={track_list} playlistUrl={metadata.lastPlaylistUrl} searchQuery={searchQuery} sortBy={sortBy} selectedTracks={selectedTracks} downloadedTracks={download.downloadedTracks} failedTracks={download.failedTracks} skippedTracks={download.skippedTracks} downloadingTrack={download.downloadingTrack} isDownloading={download.isDownloading} bulkDownloadType={download.bulkDownloadType} downloadProgress={download.downloadProgress} downloadRemainingCount={download.downloadRemainingCount} currentDownloadInfo={download.currentDownloadInfo} currentPage={currentListPage} itemsPerPage={ITEMS_PER_PAGE} downloadedLyrics={lyrics.downloadedLyrics} failedLyrics={lyrics.failedLyrics} skippedLyrics={lyrics.skippedLyrics} downloadingLyricsTrack={lyrics.downloadingLyricsTrack} checkingAvailabilityTrack={availability.checkingTrackId} availabilityMap={availability.availabilityMap} downloadedCovers={cover.downloadedCovers} failedCovers={cover.failedCovers} skippedCovers={cover.skippedCovers} downloadingCoverTrack={cover.downloadingCoverTrack} isBulkDownloadingCovers={cover.isBulkDownloadingCovers} isBulkDownloadingLyrics={lyrics.isBulkDownloadingLyrics} isMetadataLoading={metadata.loading} onSearchChange={handleSearchChange} onSortChange={setSortBy} onToggleTrack={toggleTrackSelection} onToggleSelectAll={toggleSelectAll} onSelectTrackRange={selectTrackRange} onDownloadTrack={download.handleDownloadTrack} onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position, albumArtist, releaseDate, discNumber) => lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, playlistFolderName, position, albumArtist, releaseDate, discNumber)} onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, _isArtistDiscography, position, trackId, albumArtist, releaseDate, discNumber) => cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, playlistFolderName, position, trackId, albumArtist, releaseDate, discNumber)} onCheckAvailability={availability.checkAvailability} onDownloadAllLyrics={() => lyrics.handleDownloadAllLyrics(track_list, playlistFolderName)} onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, playlistFolderName)} onDownloadAll={() => download.handleDownloadAll(track_list, playlistFolderName)} onDownloadSelected={() => download.handleDownloadSelected(selectedTracks, track_list, playlistFolderName)} onStopDownload={download.handleStopDownload} onOpenFolder={handleOpenFolder} onPageChange={setCurrentListPage} onBack={handleMetadataBack} onAlbumClick={metadata.handleAlbumClick} onArtistClick={async (artist) => {
                     const pendingArtistUrl = artist.external_urls.replace(/\/$/, "") + "/discography/all";
                     setSpotifyUrl(pendingArtistUrl);
                     const artistUrl = await metadata.handleArtistClick(artist);
@@ -484,7 +486,6 @@ function App() {
 
             <PlayerBar />
 
-            <DownloadProgressToast onClick={downloadQueue.openQueue}/>
 
             <CooldownBanner />
 

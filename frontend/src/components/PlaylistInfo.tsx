@@ -1,6 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Download, FolderOpen, ImageDown, FileText, XCircle } from "lucide-react";
+import { Download, FolderOpen, ImageDown, FileText, XCircle, ListMusic } from "lucide-react";
+import { SyncSpotifyPlaylist } from "../../wailsjs/go/main/App";
+import { openSpotifyPlaylistView } from "@/components/PlaylistSyncPage";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SearchAndSort } from "./SearchAndSort";
@@ -32,6 +34,7 @@ interface PlaylistInfoProps {
         description?: string;
     };
     trackList: TrackMetadata[];
+    playlistUrl?: string;
     searchQuery: string;
     sortBy: string;
     selectedTracks: string[];
@@ -91,11 +94,22 @@ interface PlaylistInfoProps {
     onTrackClick: (track: TrackMetadata) => void;
     onBack?: () => void;
 }
-export function PlaylistInfo({ playlistInfo, trackList, searchQuery, sortBy, selectedTracks, downloadedTracks, failedTracks, skippedTracks, downloadingTrack, isDownloading, bulkDownloadType, downloadProgress, downloadRemainingCount, currentDownloadInfo, currentPage, itemsPerPage, downloadedLyrics, failedLyrics, skippedLyrics, downloadingLyricsTrack, checkingAvailabilityTrack, availabilityMap, downloadedCovers, failedCovers, skippedCovers, downloadingCoverTrack, isBulkDownloadingCovers, isBulkDownloadingLyrics, isMetadataLoading = false, onSearchChange, onSortChange, onToggleTrack, onToggleSelectAll, onSelectTrackRange, onDownloadTrack, onDownloadLyrics, onDownloadCover, onCheckAvailability, onDownloadAllLyrics, onDownloadAllCovers, onDownloadAll, onDownloadSelected, onStopDownload, onOpenFolder, onPageChange, onAlbumClick, onArtistClick, onTrackClick, onBack, }: PlaylistInfoProps) {
+export function PlaylistInfo({ playlistInfo, trackList, playlistUrl, searchQuery, sortBy, selectedTracks, downloadedTracks, failedTracks, skippedTracks, downloadingTrack, isDownloading, bulkDownloadType, downloadProgress, downloadRemainingCount, currentDownloadInfo, currentPage, itemsPerPage, downloadedLyrics, failedLyrics, skippedLyrics, downloadingLyricsTrack, checkingAvailabilityTrack, availabilityMap, downloadedCovers, failedCovers, skippedCovers, downloadingCoverTrack, isBulkDownloadingCovers, isBulkDownloadingLyrics, isMetadataLoading = false, onSearchChange, onSortChange, onToggleTrack, onToggleSelectAll, onSelectTrackRange, onDownloadTrack, onDownloadLyrics, onDownloadCover, onCheckAvailability, onDownloadAllLyrics, onDownloadAllCovers, onDownloadAll, onDownloadSelected, onStopDownload, onOpenFolder, onPageChange, onAlbumClick, onArtistClick, onTrackClick, onBack, }: PlaylistInfoProps) {
     const settings = getSettings();
     const playlistName = playlistInfo.owner.name;
     const playlistFolderName = buildPlaylistFolderName(playlistName, playlistInfo.owner.display_name, settings.playlistOwnerFolderName);
     const [downloadingPlaylistCover, setDownloadingPlaylistCover] = useState(false);
+    const [syncingPlaylist, setSyncingPlaylist] = useState(false);
+    const handleSyncPlaylist = async () => {
+        if (!playlistUrl || syncingPlaylist) return;
+        setSyncingPlaylist(true);
+        try {
+            await SyncSpotifyPlaylist(playlistUrl);
+            toast.success("Playlist synced — find it in Library → Playlists");
+            openSpotifyPlaylistView(playlistUrl);
+        } catch (e) { toast.error(`${e}`); }
+        finally { setSyncingPlaylist(false); }
+    };
     const fetchedTrackCount = trackList.length;
     const totalTrackCount = playlistInfo.tracks.total;
     const showStreamingProgress = isMetadataLoading && totalTrackCount > 0 && fetchedTrackCount < totalTrackCount;
@@ -204,6 +218,17 @@ export function PlaylistInfo({ playlistInfo, trackList, searchQuery, sortBy, sel
                   Download All
                 </Button>
                 <SourceSelect />
+                {playlistUrl && (<Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button onClick={handleSyncPlaylist} variant="outline" disabled={syncingPlaylist}>
+                        {syncingPlaylist ? <Spinner /> : <ListMusic className="h-4 w-4"/>}
+                        Sync
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Keep this playlist synced against your library</p>
+                    </TooltipContent>
+                  </Tooltip>)}
                 {selectedTracks.length > 0 && (<Button onClick={onDownloadSelected} variant="secondary" disabled={isDownloading && bulkDownloadType === "selected"}>
                     {isDownloading && bulkDownloadType === "selected" ? (<Spinner />) : (<Download className="h-4 w-4"/>)}
                     Download Selected ({selectedTracks.length.toLocaleString()})

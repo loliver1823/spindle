@@ -480,6 +480,20 @@ func AddToQueue(id, trackName, artistName, albumName, spotifyID string) {
 // AddToQueueEx enqueues a metadata-rich item for the backend queue runner.
 // Returns the item's ID (assigned when empty).
 func AddToQueueEx(item DownloadItem) string {
+	// The same track queued or downloading already covers this request —
+	// return its ID so callers can track it instead of double-queueing.
+	if item.SpotifyID != "" {
+		downloadQueueLock.Lock()
+		for i := range downloadQueue {
+			q := &downloadQueue[i]
+			if q.SpotifyID == item.SpotifyID && (q.Status == StatusQueued || q.Status == StatusDownloading) {
+				id := q.ID
+				downloadQueueLock.Unlock()
+				return id
+			}
+		}
+		downloadQueueLock.Unlock()
+	}
 	if item.ID == "" {
 		base := item.SpotifyID
 		if base == "" {

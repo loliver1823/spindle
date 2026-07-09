@@ -8,6 +8,9 @@ import type { SpotifyMetadataResponse } from "@/types/api";
 export function useMetadata() {
     const [loading, setLoading] = useState(false);
     const [metadata, setMetadata] = useState<SpotifyMetadataResponse | null>(null);
+    // URL of the most recent playlist fetch — lets the playlist page offer
+    // "Sync to Library" without threading the URL through every component.
+    const [lastPlaylistUrl, setLastPlaylistUrl] = useState("");
     const [showVpnAdviceDialog, setShowVpnAdviceDialog] = useState(false);
     const [fetchFailureReason, setFetchFailureReason] = useState("");
     const loadingToastId = useRef<string | number | null>(null);
@@ -154,6 +157,7 @@ export function useMetadata() {
             }
             pushView(previousView);
             setMetadata(data);
+            if ("playlist_info" in data) setLastPlaylistUrl(url);
             if ("track" in data) {
                 logger.success(`fetched track: ${data.track.name} - ${data.track.artists}`);
                 logger.debug(`duration: ${data.track.duration_ms}ms`);
@@ -272,6 +276,7 @@ export function useMetadata() {
     return {
         loading,
         metadata,
+        lastPlaylistUrl,
         showVpnAdviceDialog,
         setShowVpnAdviceDialog,
         fetchFailureReason,

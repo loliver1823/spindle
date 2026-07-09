@@ -18,6 +18,7 @@ import {
     WriteBulkTrackMetadata, TrackIDsForAlbums, TrackIDsForArtists, GetImageInfo, EmbedCoverFromSource, SelectFile, GetPlaylists,
     GetPlaylistTracks, CreatePlaylist, RenamePlaylist, DeletePlaylist, AddTracksToPlaylist, RemoveTrackFromPlaylist, SelectFolder,
     FindLibraryAlbum, GetArtistNewReleases, DeleteLibraryTracks,
+    ListSyncedPlaylists, RemoveSyncedPlaylist, SyncSpotifyPlaylist,
 } from "../../wailsjs/go/main/App";
 import { openSpotifyPlaylistView } from "@/components/PlaylistSyncPage";
 import { FixTrackMatchDialog } from "@/components/FixTrackMatchDialog";
@@ -296,6 +297,7 @@ export function LibraryPage() {
     const [artistReleases, setArtistReleases] = useState<backend.ArtistReleases | null>(null);
     const [albumTracks, setAlbumTracks] = useState<Track[]>([]);
     const [playlists, setPlaylists] = useState<Playlist[]>([]);
+    const [syncedPls, setSyncedPls] = useState<backend.SyncedPlaylist[]>([]);
     const [playlistTracks, setPlaylistTracks] = useState<Track[]>([]);
     const [sel, setSel] = useState<Set<string>>(new Set());
     const [selKind, setSelKind] = useState<"songs" | "albums" | "artists" | "">("");
@@ -476,7 +478,10 @@ export function LibraryPage() {
                 setSongs(await GetLibraryTracks(q));
             } else if (route.kind === "artist") setArtistReleases(await GetArtistReleases(route.name, "year", true));
             else if (route.kind === "album") setAlbumTracks(await GetAlbumTracks(route.album.id));
-            else if (route.kind === "playlists") setPlaylists(await GetPlaylists());
+            else if (route.kind === "playlists") {
+                setPlaylists(await GetPlaylists());
+                try { setSyncedPls(await ListSyncedPlaylists() || []); } catch { setSyncedPls([]); }
+            }
             else if (route.kind === "playlist") setPlaylistTracks(await GetPlaylistTracks(route.playlist.id));
         } catch (e) { toast.error(`${e}`); }
         finally { setLoading(false); }
@@ -500,6 +505,16 @@ export function LibraryPage() {
                 if (trackIDs && trackIDs.length) await AddTracksToPlaylist(id, trackIDs);
                 toast.success(`Created "${name}"`);
                 loadPlaylists();
+            } catch (e) { toast.error(`${e}`); }
+        },
+    });
+    const syncPlaylistPrompt = () => setNameDialog({
+        title: "Sync Spotify playlist", value: "",
+        submit: async (url) => {
+            try {
+                const p = await SyncSpotifyPlaylist(url);
+                toast.success(`"${p.name}" synced`);
+                try { setSyncedPls(await ListSyncedPlaylists() || []); } catch { /* */ }
             } catch (e) { toast.error(`${e}`); }
         },
     });
@@ -798,6 +813,10 @@ export function LibraryPage() {
                             className="bg-card hover:bg-accent transition rounded-lg p-3 flex flex-col items-center justify-center aspect-[3/4] text-muted-foreground gap-2">
                             <Plus className="h-8 w-8" /><span className="text-sm font-medium">New Playlist</span>
                         </button>
+                        <button onClick={syncPlaylistPrompt}
+                            className="bg-card hover:bg-accent transition rounded-lg p-3 flex flex-col items-center justify-center aspect-[3/4] text-muted-foreground gap-2">
+                            <Link2 className="h-8 w-8" /><span className="text-sm font-medium">Sync Spotify Playlist</span>
+                        </button>
                         {playlists.map((p) => (
                             <ContextMenu key={p.id}>
                                 <ContextMenuTrigger asChild>
@@ -817,6 +836,33 @@ export function LibraryPage() {
                                     <ContextMenuSeparator />
                                     <ContextMenuItem onSelect={() => renamePlaylist(p)}><Pencil className="h-4 w-4 mr-2" /> Rename</ContextMenuItem>
                                     <ContextMenuItem onSelect={() => removePlaylist(p)}><Trash2 className="h-4 w-4 mr-2" /> Delete</ContextMenuItem>
+                                </ContextMenuContent>
+                            </ContextMenu>
+                        ))}
+                        {syncedPls.map((p) => (
+                            <ContextMenu key={`sync-${p.id}`}>
+                                <ContextMenuTrigger asChild>
+                                    <button onClick={() => openSpotifyPlaylistView(p.url)}
+                                        className="group text-left bg-card hover:bg-accent transition rounded-lg p-3">
+                                        <div className="relative aspect-square mb-3">
+                                            {p.cover ? <img src={p.cover} alt="" className="w-full h-full rounded-md object-cover" /> :
+                                                <div className="w-full h-full rounded-md flex items-center justify-center bg-gradient-to-br from-muted to-card"><ListMusic className="h-1/3 w-1/3 text-muted-foreground/40" /></div>}
+                                            <span className="absolute top-1.5 left-1.5 text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-primary/80 text-primary-foreground">
+                                                Synced
+                                            </span>
+                                        </div>
+                                        <div className="font-semibold truncate text-sm">{p.name || "Playlist"}</div>
+                                        <div className="text-xs text-muted-foreground mt-0.5">
+                                            {p.haveCount} of {plural(p.total, "song")} in library
+                                        </div>
+                                    </button>
+                                </ContextMenuTrigger>
+                                <ContextMenuContent className="w-44">
+                                    <ContextMenuItem onSelect={() => openSpotifyPlaylistView(p.url)}><ListMusic className="h-4 w-4 mr-2" /> Open</ContextMenuItem>
+                                    <ContextMenuItem onSelect={async () => {
+                                        try { await RemoveSyncedPlaylist(p.id); setSyncedPls((s) => s.filter((x) => x.id !== p.id)); }
+                                        catch (e) { toast.error(`${e}`); }
+                                    }}><Trash2 className="h-4 w-4 mr-2" /> Remove sync</ContextMenuItem>
                                 </ContextMenuContent>
                             </ContextMenu>
                         ))}

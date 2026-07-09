@@ -47,7 +47,7 @@ export function PlaylistSyncPage() {
     const [fromExternal, setFromExternal] = useState(false);
     const [loadingDetail, setLoadingDetail] = useState(false);
     const [resyncing, setResyncing] = useState(false);
-    const { handleDownloadTrack, handleDownloadSelected, isDownloading, downloadingTrack, downloadProgress, downloadRemainingCount } = useDownload();
+    const { handleDownloadTrack, handleDownloadSelected, isDownloading, downloadingTrack } = useDownload();
 
     const loadList = async () => {
         try { setPlaylists(await ListSyncedPlaylists() || []); }
@@ -190,9 +190,17 @@ export function PlaylistSyncPage() {
     };
 
     const onDownloadMissing = async () => {
-        if (!detail || isDownloading) return;
+        if (!detail) return;
         const missing = detail.matches.filter((m) => !m.local);
         if (!missing.length) { toast.success("Nothing missing — you have it all!"); return; }
+        // Downloading a playlist means you care about it — keep it synced.
+        if (!detail.playlist.synced) {
+            try {
+                await SetPlaylistSynced(detail.playlist.id, true);
+                setDetail((d) => d ? new backend.SyncedPlaylistDetail({ ...d, playlist: { ...d.playlist, synced: true } }) : d);
+                await loadList();
+            } catch { /* non-fatal */ }
+        }
         await handleDownloadSelected(
             missing.map((m) => m.ref.spotifyId),
             missing.map(refToTrackMeta),
@@ -244,11 +252,9 @@ export function PlaylistSyncPage() {
                                     </Button>
                                 )}
                                 {missing > 0 && (
-                                    <Button variant="outline" onClick={onDownloadMissing} disabled={isDownloading}>
+                                    <Button variant="outline" onClick={onDownloadMissing}>
                                         {isDownloading ? <Spinner className="h-4 w-4 mr-1" /> : <Download className="h-4 w-4 mr-1" />}
-                                        {isDownloading
-                                            ? `Downloading… ${downloadRemainingCount > 0 ? `${downloadRemainingCount} left` : `${downloadProgress}%`}`
-                                            : `Download missing (${missing})`}
+                                        Download missing ({missing})
                                     </Button>
                                 )}
                                 {!p.synced && (

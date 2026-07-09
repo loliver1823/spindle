@@ -7,6 +7,7 @@ import { PREVIEW_VOLUME_CHANGED_EVENT } from "@/lib/preview";
 import { fetchCurrentIPInfo } from "@/lib/api";
 import type { CurrentIPInfo } from "@/types/api";
 import { openExternal } from "@/lib/utils";
+import { TitleBarDownloadStatus } from "@/components/TitleBarDownloadStatus";
 import { useEffect, useRef, useState } from "react";
 const IP_INFO_REFRESH_INTERVAL_MS = 30000;
 const SPOTIFY_BLOCKED_COUNTRY_CODES = new Set([
@@ -131,6 +132,7 @@ export function TitleBar() {
 
 
       <div className="fixed top-1.5 right-2 z-50 flex h-7 gap-0.5 items-center">
+        <TitleBarDownloadStatus />
         <Menubar className="border-none bg-transparent shadow-none px-0 mr-1" style={{ "--wails-draggable": "no-drag" } as React.CSSProperties}>
             <MenubarMenu>
                 <MenubarTrigger className="cursor-pointer w-8 h-7 p-0 flex items-center justify-center hover:bg-muted transition-colors rounded data-[state=open]:bg-muted">
