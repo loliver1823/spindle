@@ -1112,9 +1112,11 @@ function ArtistView({ releases, name, bust, onOpenAlbum, onAllSongs, onArtist, o
     const [newRelOpen, setNewRelOpen] = useState(false);
     const [newRel, setNewRel] = useState<backend.ArtistReleaseCheck[] | null>(null);
     const [newRelLoading, setNewRelLoading] = useState(false);
+    const [newRelFilter, setNewRelFilter] = useState("all");
     const openNewReleases = async () => {
         setNewRelOpen(true);
         setNewRelLoading(true);
+        setNewRelFilter("all");
         setNewRel(null);
         try { setNewRel(await GetArtistNewReleases(name) || []); }
         catch (e) { toast.error(`${e}`); setNewRelOpen(false); }
@@ -1287,39 +1289,57 @@ function ArtistView({ releases, name, bust, onOpenAlbum, onAllSongs, onArtist, o
                             <Spinner className="h-5 w-5 mr-2" /> Fetching discography…
                         </div>
                     )}
-                    {!newRelLoading && newRel && (
-                        <div className="max-h-96 overflow-y-auto -mx-1">
-                            {newRel.filter((r) => !r.inLibrary).length === 0 && (
-                                <div className="py-8 text-center text-sm text-muted-foreground">
-                                    Nothing missing — you have it all 🎉
+                    {!newRelLoading && newRel && (() => {
+                        const missingRel = newRel.filter((r) => !r.inLibrary);
+                        const types = [...new Set(missingRel.map((r) => (r.type || "other").toLowerCase()))];
+                        const shown = newRelFilter === "all" ? missingRel : missingRel.filter((r) => (r.type || "other").toLowerCase() === newRelFilter);
+                        const chipLabel = (t: string) => t === "ep" ? "EPs" : `${t.charAt(0).toUpperCase()}${t.slice(1)}s`;
+                        const openRelease = (r: backend.ArtistReleaseCheck) => {
+                            setNewRelOpen(false);
+                            window.dispatchEvent(new CustomEvent("spindle:fetch-url", { detail: r.url }));
+                        };
+                        return (<>
+                            {types.length > 1 && (
+                                <div className="flex gap-1.5 flex-wrap">
+                                    <button type="button" onClick={() => setNewRelFilter("all")}
+                                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${newRelFilter === "all" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>
+                                        All ({missingRel.length})
+                                    </button>
+                                    {types.map((t) => (
+                                        <button key={t} type="button" onClick={() => setNewRelFilter(t)}
+                                            className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${newRelFilter === t ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>
+                                            {chipLabel(t)} ({missingRel.filter((r) => (r.type || "other").toLowerCase() === t).length})
+                                        </button>
+                                    ))}
                                 </div>
                             )}
-                            {newRel.filter((r) => !r.inLibrary).map((r) => (
-                                <div key={r.id} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent group">
-                                    {r.cover
-                                        ? <img src={r.cover} alt="" loading="lazy" className="h-11 w-11 rounded object-cover shrink-0" />
-                                        : <div className="h-11 w-11 rounded bg-muted shrink-0" />}
-                                    <div className="min-w-0 flex-1">
-                                        <div className="text-sm truncate">{r.name}</div>
-                                        <div className="text-xs text-muted-foreground">
-                                            {(r.releaseDate || "").slice(0, 4)}
-                                            {r.type ? ` · ${r.type.charAt(0).toUpperCase()}${r.type.slice(1)}` : ""}
-                                            {r.totalTracks > 0 ? ` · ${r.totalTracks} track${r.totalTracks === 1 ? "" : "s"}` : ""}
-                                        </div>
+                            <div className="max-h-96 overflow-y-auto -mx-1">
+                                {missingRel.length === 0 && (
+                                    <div className="py-8 text-center text-sm text-muted-foreground">
+                                        Nothing missing — you have it all 🎉
                                     </div>
-                                    <button type="button"
-                                        className="shrink-0 text-amber-500 hover:text-amber-400 transition-colors cursor-pointer p-1"
-                                        title="Get this release"
-                                        onClick={() => {
-                                            setNewRelOpen(false);
-                                            window.dispatchEvent(new CustomEvent("spindle:fetch-url", { detail: r.url }));
-                                        }}>
-                                        <Download className="h-4 w-4" />
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                                )}
+                                {shown.map((r) => (
+                                    <div key={r.id} onClick={() => openRelease(r)}
+                                        className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent group cursor-pointer"
+                                        title="Open this release on the Download page">
+                                        {r.cover
+                                            ? <img src={r.cover} alt="" loading="lazy" className="h-11 w-11 rounded object-cover shrink-0" />
+                                            : <div className="h-11 w-11 rounded bg-muted shrink-0" />}
+                                        <div className="min-w-0 flex-1">
+                                            <div className="text-sm truncate">{r.name}</div>
+                                            <div className="text-xs text-muted-foreground">
+                                                {(r.releaseDate || "").slice(0, 4)}
+                                                {r.type ? ` · ${r.type.charAt(0).toUpperCase()}${r.type.slice(1)}` : ""}
+                                                {r.totalTracks > 0 ? ` · ${plural(r.totalTracks, "track")}` : ""}
+                                            </div>
+                                        </div>
+                                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 transition" />
+                                    </div>
+                                ))}
+                            </div>
+                        </>);
+                    })()}
                 </DialogContent>
             </Dialog>
             {topTracks.length > 0 && (
