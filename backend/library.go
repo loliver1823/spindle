@@ -436,8 +436,13 @@ func parseArtists(tags map[string][]string, title, albumArtist string) (display 
 			add(c, RoleCollab)
 		}
 	}
-	if albumArtist != "" && !primarySet[normKey(albumArtist)] {
-		add(albumArtist, RoleAlbumArtist)
+	// Every artist named in the album-artist tag owns the release — a joint
+	// single or split EP tagged "State Champs; Simple Plan" shows under BOTH
+	// bands' own releases instead of Appears On.
+	for _, aa := range splitArtists(albumArtist) {
+		if !primarySet[normKey(aa)] {
+			add(aa, RoleAlbumArtist)
+		}
 	}
 	for _, f := range feat {
 		// don't double-credit a guest who is already a primary artist
@@ -1197,7 +1202,7 @@ type LibraryFolder struct {
 // roleSchemaVersion bumps whenever artist-role derivation changes (e.g. the
 // first-artist-is-primary rule). A mismatch forces one full tag re-read so
 // existing rows pick up the new rules; unchanged files are skipped otherwise.
-const roleSchemaVersion = 3
+const roleSchemaVersion = 4
 
 func RescanAllFolders(onProgress func(done, total int, current string)) (ScanResult, error) {
 	var agg ScanResult

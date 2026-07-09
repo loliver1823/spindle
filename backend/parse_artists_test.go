@@ -72,6 +72,24 @@ func TestParseArtistsSingleArtistUnchanged(t *testing.T) {
 	}
 }
 
+func TestParseArtistsJointReleaseOwnedByBoth(t *testing.T) {
+	// A split EP / joint single tags BOTH bands as album artist — each gets
+	// an owning credit so the release shows on both bands' own shelves.
+	_, artists := parseArtists(
+		map[string][]string{taglib.Artist: {"State Champs", "Simple Plan"}},
+		"Where I Belong", "State Champs; Simple Plan")
+	roles := rolesOf(artists)
+	if roles["State Champs"] != RolePrimary {
+		t.Errorf("State Champs should be primary, got %q", roles["State Champs"])
+	}
+	if roles["Simple Plan"] != RoleAlbumArtist {
+		t.Errorf("Simple Plan should have an owning album_artist credit, got %q", roles["Simple Plan"])
+	}
+	if _, ok := roles["State Champs; Simple Plan"]; ok {
+		t.Error("album artist string must be split, not credited literally")
+	}
+}
+
 func TestParseArtistsAlbumArtistCredited(t *testing.T) {
 	// Album artist differing from the track artist still gets a credit row.
 	_, artists := parseArtists(map[string][]string{taglib.Artist: {"Casey Edwards"}}, "Bury the Light", "Devil May Cry")
