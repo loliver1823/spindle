@@ -2,16 +2,15 @@ import { useState, useEffect, useCallback } from "react";
 import { flushSync } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { InputWithContext } from "@/components/ui/input-with-context";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
-import { FolderOpen, Save, RotateCcw, ArrowRight, MonitorCog, FolderCog, Router, FolderLock, Plus, Trash2, ExternalLink, PlugZap, Download, Tags } from "lucide-react";
+import { Save, RotateCcw, ArrowRight, MonitorCog, FolderCog, Router, FolderLock, Plus, Trash2, ExternalLink, PlugZap, Download, Tags } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { getSettings, getSettingsWithDefaults, saveSettings, resetToDefaultSettings, applyThemeMode, applyFont, getFontOptions, parseGoogleFontUrl, loadGoogleFontUrl, loadCustomFonts, saveCustomFonts, TEMPLATE_VARIABLES, DEFAULT_SETTINGS, sanitizeAutoOrder, type Settings as SettingsType, type FontFamily, type CustomFontFamily, type ExistingFileCheckMode, } from "@/lib/settings";
 import { FormatEditor } from "@/components/FormatEditor";
 import { themes, applyTheme } from "@/lib/themes";
-import { SelectFolder, OpenConfigFolder, CheckCustomTidalAPI, CheckCustomQobuzAPI, EnsureLibraryFolder } from "../../wailsjs/go/main/App";
+import { OpenConfigFolder, CheckCustomTidalAPI, CheckCustomQobuzAPI, EnsureLibraryFolder } from "../../wailsjs/go/main/App";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { openExternal } from "@/lib/utils";
 import { ApiStatusTab } from "./ApiStatusTab";
@@ -125,18 +124,6 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
         applyFont(defaultSettings.fontFamily, defaultSettings.customFonts);
         setShowResetConfirm(false);
         toast.success("Settings reset to default");
-    };
-    const handleBrowseFolder = async () => {
-        try {
-            const selectedPath = await SelectFolder(tempSettings.downloadPath || "");
-            if (selectedPath && selectedPath.trim() !== "") {
-                setTempSettings((prev) => ({ ...prev, downloadPath: selectedPath }));
-            }
-        }
-        catch (error) {
-            console.error("Error selecting folder:", error);
-            toast.error(`Error selecting folder: ${error}`);
-        }
     };
     const closeAddFontDialog = () => {
         setShowAddFontDialog(false);
@@ -407,19 +394,12 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
 
             <div className="space-y-4 md:pl-8">
               <div className="space-y-2">
-                <Label htmlFor="download-path">Music Folder</Label>
-                <div className="flex gap-2">
-                  <InputWithContext id="download-path" value={tempSettings.downloadPath} onChange={(e) => setTempSettings((prev) => ({
-                ...prev,
-                downloadPath: e.target.value,
-            }))} placeholder="C:\Users\YourUsername\Music"/>
-                  <Button type="button" onClick={handleBrowseFolder} className="gap-1.5">
-                    <FolderOpen className="h-4 w-4"/>
-                    Browse
-                  </Button>
+                <Label>Library</Label>
+                <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground truncate" title={tempSettings.downloadPath || undefined}>
+                  {tempSettings.downloadPath || "No library folder yet"}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Downloads are saved here, and it's automatically part of your library.
+                  Downloads always save into your library. Manage folders from Library → Folders.
                 </p>
               </div>
             </div>

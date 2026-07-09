@@ -730,11 +730,10 @@ func ImportDownloadedFile(root, path string) {
 		return
 	}
 	if strings.TrimSpace(root) != "" && root != "." {
-		if r, err := libDB.Exec("INSERT OR IGNORE INTO library_folders(path, added_at) VALUES(?, ?)", filepath.Clean(root), time.Now().Unix()); err == nil {
-			if n, _ := r.RowsAffected(); n > 0 {
-				// Brand-new download root — extend the realtime watcher to it.
-				go RefreshLibraryWatcher()
-			}
+		// Nesting-aware: never registers a root already covered by a folder.
+		if added, err := EnsureLibraryFolder(root); err == nil && added {
+			// Brand-new download root — extend the realtime watcher to it.
+			go RefreshLibraryWatcher()
 		}
 	}
 	stmt, err := libDB.Prepare(trackUpsertSQL)
@@ -1224,6 +1223,28 @@ func GetLibraryFolders() ([]LibraryFolder, error) {
 		out = append(out, f)
 	}
 	sep := string(os.PathSeparator)
+	// A root nested inside another root is redundant (the parent already
+	// covers its files) — drop such rows so stray registrations can't pile up.
+	pruned := out[:0]
+	for _, f := range out {
+		nested := false
+		lf := strings.ToLower(f.Path)
+		for _, other := range out {
+			if other.Path == f.Path {
+				continue
+			}
+			if strings.HasPrefix(lf, strings.ToLower(other.Path)+sep) {
+				nested = true
+				break
+			}
+		}
+		if nested {
+			libDB.Exec("DELETE FROM library_folders WHERE path=?", f.Path)
+			continue
+		}
+		pruned = append(pruned, f)
+	}
+	out = pruned
 	for i := range out {
 		libDB.QueryRow("SELECT COUNT(*) FROM tracks WHERE path=? OR path LIKE ?",
 			out[i].Path, out[i].Path+sep+"%").Scan(&out[i].TrackCount)

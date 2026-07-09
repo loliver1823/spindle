@@ -639,10 +639,9 @@ export function LibraryPage() {
         try {
             const res = await ScanLibraryFolder(folder);
             toast.success(`Scanned: ${res.added} added, ${res.updated} updated, ${res.skipped} unchanged`);
-            // The first library folder becomes the download destination too.
+            // Downloads always live in the library: the first folder is the destination.
             if (wasFirst) {
                 await saveSettings({ ...getSettings(), downloadPath: folder });
-                toast.info("Downloads will save into this folder");
             }
             await Promise.all([loadFolders(), load(), loadStats()]);
             void enrichLibrary();
@@ -653,7 +652,14 @@ export function LibraryPage() {
         try {
             const n = await RemoveLibraryFolder(p);
             toast.success(`Removed ${plural(n, "track")} from library`);
-            await Promise.all([loadFolders(), load(), loadStats()]);
+            // Keep downloads pointed at a folder that is still in the library.
+            const remaining = await GetLibraryFolders();
+            setFolders(remaining);
+            const s = getSettings();
+            if (normFolderPath(s.downloadPath || "") === normFolderPath(p)) {
+                await saveSettings({ ...s, downloadPath: remaining[0]?.path || "" });
+            }
+            await Promise.all([load(), loadStats()]);
         } catch (e) { toast.error(`${e}`); }
     };
     const rescanAll = async () => {
@@ -1933,51 +1939,28 @@ function FolderManager({ open, onOpenChange, folders, onAdd, onRemove, onRescan,
     onAdd: () => void; onRemove: (p: string) => void; onRescan: () => void; onRefreshMetadata: () => void;
     scanning: boolean; refreshing: boolean;
 }) {
-    const [dlPath, setDlPath] = useState(getSettings().downloadPath);
-    useEffect(() => { if (open) setDlPath(getSettings().downloadPath); }, [open]);
-    const setAsDownload = async (path: string) => {
-        await saveSettings({ ...getSettings(), downloadPath: path });
-        setDlPath(path);
-        toast.success("Downloads now save to this folder");
-    };
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-xl">
                 <DialogHeader>
                     <DialogTitle>Library folders</DialogTitle>
-                    <DialogDescription>Folders scanned into your library — downloads save into the folder marked below. Removing one deletes its tracks from the library (files on disk are untouched).</DialogDescription>
+                    <DialogDescription>Folders scanned into your library — downloads save here too. Removing one deletes its tracks from the library (files on disk are untouched).</DialogDescription>
                 </DialogHeader>
                 <div className="max-h-72 overflow-y-auto -mx-1">
                     {folders.length === 0 && <div className="px-3 py-6 text-center text-sm text-muted-foreground">No folders yet.</div>}
-                    {folders.map((f) => {
-                        const isDl = normFolderPath(f.path) === normFolderPath(dlPath || "");
-                        return (
-                            <div key={f.path} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent group">
-                                <Folder className="h-4 w-4 text-muted-foreground shrink-0" />
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                        <span className="truncate text-sm">{f.path}</span>
-                                        {isDl && (
-                                            <span className="shrink-0 text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-primary/15 text-primary">
-                                                Downloads
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">{plural(f.trackCount, "track")}</div>
-                                </div>
-                                {!isDl && (
-                                    <button onClick={() => setAsDownload(f.path)} title="Save downloads to this folder"
-                                        className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition">
-                                        <Download className="h-4 w-4" />
-                                    </button>
-                                )}
-                                <button onClick={() => onRemove(f.path)} title="Remove from library"
-                                    className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition">
-                                    <Trash2 className="h-4 w-4" />
-                                </button>
+                    {folders.map((f) => (
+                        <div key={f.path} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent group">
+                            <Folder className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm">{f.path}</div>
+                                <div className="text-xs text-muted-foreground">{plural(f.trackCount, "track")}</div>
                             </div>
-                        );
-                    })}
+                            <button onClick={() => onRemove(f.path)} title="Remove from library"
+                                className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition">
+                                <Trash2 className="h-4 w-4" />
+                            </button>
+                        </div>
+                    ))}
                 </div>
                 <div className="flex gap-2">
                     <Button onClick={onAdd} disabled={scanning} className="flex-1">
