@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	gosort "sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1529,13 +1530,48 @@ func GetLibraryAlbumArtists(search, sort string, desc bool) ([]LibraryArtist, er
 		return nil, err
 	}
 	defer rows.Close()
+	// Joint releases tag several owners ("Simple Plan; State Champs") — split
+	// and attribute the tracks to EACH artist instead of showing a phantom
+	// combined artist card. Merged counts keep the grid's requested order.
 	out := []LibraryArtist{}
+	index := map[string]int{}
 	for rows.Next() {
 		var a LibraryArtist
 		if err := rows.Scan(&a.Name, &a.TrackCount, &a.CoverPath); err != nil {
 			return nil, err
 		}
-		out = append(out, a)
+		for _, name := range splitArtists(a.Name) {
+			if i, ok := index[normKey(name)]; ok {
+				out[i].TrackCount += a.TrackCount
+				continue
+			}
+			index[normKey(name)] = len(out)
+			out = append(out, LibraryArtist{Name: name, TrackCount: a.TrackCount, CoverPath: a.CoverPath})
+		}
+	}
+	// Merging split credits can change counts/positions — re-apply the
+	// requested order on the merged list.
+	nameLess := func(i, j int) bool {
+		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
+	}
+	if sort == "name" {
+		gosort.SliceStable(out, func(i, j int) bool {
+			if desc {
+				return nameLess(j, i)
+			}
+			return nameLess(i, j)
+		})
+	} else {
+		asc := (sort == "count" || sort == "added") && !desc
+		gosort.SliceStable(out, func(i, j int) bool {
+			if out[i].TrackCount != out[j].TrackCount {
+				if asc {
+					return out[i].TrackCount < out[j].TrackCount
+				}
+				return out[i].TrackCount > out[j].TrackCount
+			}
+			return nameLess(i, j)
+		})
 	}
 	return out, nil
 }
