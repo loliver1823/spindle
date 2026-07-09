@@ -31,7 +31,9 @@ interface ArtistInfoProps {
         verified?: boolean;
         listeners?: number;
         rank?: number;
+        discography_type?: string;
     };
+    onBrowseQobuz?: (artistName: string) => void;
     albumList: Array<{
         id: string;
         name: string;
@@ -102,7 +104,7 @@ interface ArtistInfoProps {
     onTrackClick?: (track: TrackMetadata) => void;
     onBack?: () => void;
 }
-export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sortBy, selectedTracks, downloadedTracks, failedTracks, skippedTracks, downloadingTrack, isDownloading, bulkDownloadType, downloadProgress, downloadRemainingCount, currentDownloadInfo, currentPage, itemsPerPage, downloadedLyrics, failedLyrics, skippedLyrics, downloadingLyricsTrack, checkingAvailabilityTrack, availabilityMap, downloadedCovers, failedCovers, skippedCovers, downloadingCoverTrack, isBulkDownloadingCovers, isBulkDownloadingLyrics, isMetadataLoading = false, onSearchChange, onSortChange, onToggleTrack, onToggleSelectAll, onSelectTrackRange, onDownloadTrack, onDownloadLyrics, onDownloadCover, onCheckAvailability, onDownloadAllLyrics, onDownloadAllCovers, onDownloadAll, onDownloadSelected, onStopDownload, onOpenFolder, onAlbumClick, onArtistClick, onPageChange, onTrackClick, onBack, }: ArtistInfoProps) {
+export function ArtistInfo({ artistInfo, albumList, trackList, onBrowseQobuz, searchQuery, sortBy, selectedTracks, downloadedTracks, failedTracks, skippedTracks, downloadingTrack, isDownloading, bulkDownloadType, downloadProgress, downloadRemainingCount, currentDownloadInfo, currentPage, itemsPerPage, downloadedLyrics, failedLyrics, skippedLyrics, downloadingLyricsTrack, checkingAvailabilityTrack, availabilityMap, downloadedCovers, failedCovers, skippedCovers, downloadingCoverTrack, isBulkDownloadingCovers, isBulkDownloadingLyrics, isMetadataLoading = false, onSearchChange, onSortChange, onToggleTrack, onToggleSelectAll, onSelectTrackRange, onDownloadTrack, onDownloadLyrics, onDownloadCover, onCheckAvailability, onDownloadAllLyrics, onDownloadAllCovers, onDownloadAll, onDownloadSelected, onStopDownload, onOpenFolder, onAlbumClick, onArtistClick, onPageChange, onTrackClick, onBack, }: ArtistInfoProps) {
     const [downloadingHeader, setDownloadingHeader] = useState(false);
     const [downloadingAvatar, setDownloadingAvatar] = useState(false);
     const [downloadingGalleryIndex, setDownloadingGalleryIndex] = useState<number | null>(null);
@@ -405,9 +407,9 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
                       <span>{albumCountLabel}</span>
                       <span>•</span>
                       <span>{trackCountLabel}</span>
-                      {artistInfo.genres.length > 0 && (<>
+                      {(artistInfo.genres || []).length > 0 && (<>
                           <span>•</span>
-                          <span>{artistInfo.genres.join(", ")}</span>
+                          <span>{(artistInfo.genres || []).join(", ")}</span>
                         </>)}
                     </div>
                   </div>
@@ -458,15 +460,32 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
                   <span>{albumCountLabel}</span>
                   <span>•</span>
                   <span>{trackCountLabel}</span>
-                  {artistInfo.genres.length > 0 && (<>
+                  {(artistInfo.genres || []).length > 0 && (<>
                       <span>•</span>
-                      <span>{artistInfo.genres.join(", ")}</span>
+                      <span>{(artistInfo.genres || []).join(", ")}</span>
                     </>)}
                 </div>
               </div>
             </div>
           </CardContent>)}
       </Card>
+
+      {!isMetadataLoading && onBrowseQobuz && artistInfo.discography_type !== "qobuz" && albumList.length <= 3 && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+          <p className="text-sm text-muted-foreground">
+            Spotify only lists {albumList.length === 1 ? "1 release" : `${albumList.length} releases`} for this artist — some artists have pulled their catalog from Spotify.
+          </p>
+          <Button variant="outline" className="shrink-0" onClick={() => onBrowseQobuz(artistInfo.name)}>
+            Browse full catalog on Qobuz
+          </Button>
+        </div>
+      )}
+
+      {artistInfo.discography_type === "qobuz" && (
+        <div className="rounded-lg border bg-muted/40 px-4 py-2.5 text-sm text-muted-foreground">
+          Showing {albumList.length.toLocaleString()} releases from Qobuz's catalog.
+        </div>
+      )}
 
       <div className="border-b">
         <div className="flex items-center justify-between gap-4">

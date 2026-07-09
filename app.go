@@ -593,6 +593,23 @@ func (a *App) GetArtistNewReleases(name string) ([]backend.ArtistReleaseCheck, e
 	return backend.GetArtistNewReleases(name)
 }
 
+// GetQobuzArtistDiscography assembles an artist's full discography from
+// Qobuz's catalog — the fallback when Spotify's listing is missing or sparse
+// (artists who pulled their music). Track IDs use the qobuz_ convention the
+// queue already downloads directly. Returns JSON exactly like
+// GetSpotifyMetadata so the frontend renders it through the same path.
+func (a *App) GetQobuzArtistDiscography(name string) (string, error) {
+	payload, err := backend.GetQobuzArtistDiscography(name)
+	if err != nil {
+		return "", err
+	}
+	jsonData, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("failed to encode response: %v", err)
+	}
+	return string(jsonData), nil
+}
+
 // SearchQobuzTracks searches Qobuz's catalog directly — for music that isn't
 // on Spotify.
 func (a *App) SearchQobuzTracks(query string) ([]backend.QobuzSearchTrack, error) {

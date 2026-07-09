@@ -187,6 +187,31 @@ export function useMetadata() {
             setLoading(false);
         }
     };
+    // Fallback catalog: assemble the artist's discography from Qobuz when
+    // Spotify's listing is missing or sparse (artists who pulled their music).
+    const fetchQobuzArtist = async (artistName: string) => {
+        const previousView = metadataRef.current;
+        setLoading(true);
+        setMetadata(null);
+        logger.info(`fetching ${artistName} discography from Qobuz...`);
+        try {
+            const jsonString = await (window as any)["go"]["main"]["App"]["GetQobuzArtistDiscography"](artistName);
+            const data = JSON.parse(jsonString);
+            pushView(previousView);
+            setMetadata(data);
+            logger.success(`Qobuz discography: ${data.album_list?.length || 0} releases, ${data.track_list?.length || 0} tracks`);
+            toast.success(`Loaded ${data.album_list?.length || 0} releases from Qobuz`);
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : `${err}`;
+            logger.error(`Qobuz discography failed: ${msg}`);
+            toast.error(msg);
+            setMetadata(previousView);
+        }
+        finally {
+            setLoading(false);
+        }
+    };
     const handleFetchMetadata = async (url: string) => {
         if (!url.trim()) {
             logger.warning("empty url provided");
@@ -206,6 +231,29 @@ export function useMetadata() {
         name: string;
         external_urls: string;
     }) => {
+        // Qobuz-sourced albums: every track is already in the artist payload —
+        // synthesize the album view locally instead of fetching Spotify.
+        if (album.id?.startsWith("qobuz_album_")) {
+            const cur = metadataRef.current;
+            if (cur && "track_list" in cur) {
+                const tracks = (cur.track_list || []).filter((t: any) => t.album_id === album.id);
+                if (tracks.length > 0) {
+                    const first = tracks[0] as any;
+                    pushView(metadataRef.current);
+                    setMetadata({
+                        album_info: {
+                            total_tracks: tracks.length,
+                            name: album.name,
+                            release_date: first.release_date || "",
+                            artists: first.album_artist || first.artists || "",
+                            images: first.images || "",
+                        },
+                        track_list: tracks,
+                    } as any);
+                    return album.external_urls;
+                }
+            }
+        }
         const albumUrl = album.external_urls;
         if (!albumUrl) {
             toast.error("Album link unavailable");
@@ -281,6 +329,7 @@ export function useMetadata() {
         setShowVpnAdviceDialog,
         fetchFailureReason,
         handleFetchMetadata,
+        fetchQobuzArtist,
         handleAlbumClick,
         handleArtistClick,
         goBack,
