@@ -1068,7 +1068,9 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 
 	metadataSeparator := req.Separator
 	if metadataSeparator == "" {
-		metadataSeparator = ", "
+		// Fallback matches the frontend's default ("semicolon") — a comma
+		// default would write artist tags our own ;-only scanner can't split.
+		metadataSeparator = "; "
 		metadataSettings, _ := a.LoadSettings()
 		if metadataSettings != nil {
 			if sep, ok := metadataSettings["separator"].(string); ok {

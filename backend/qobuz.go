@@ -104,7 +104,7 @@ func normalizeQobuzSearchValue(value string) string {
 		"-", " ",
 		"_", " ",
 	)
-	normalized := strings.ToLower(strings.TrimSpace(value))
+	normalized := strings.ToLower(strings.TrimSpace(matchCharFolder.Replace(value)))
 	normalized = replacer.Replace(normalized)
 	return strings.Join(strings.Fields(normalized), " ")
 }

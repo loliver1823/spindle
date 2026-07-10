@@ -149,6 +149,9 @@ func TestScoreMatchSubstringGuard(t *testing.T) {
 		{"Anthem Part Two", "Anthem"},
 		{"Anthem", "Anthem Part Two"},
 		{"Song 2", "Song"},
+		// "with" is not a feat marker (same rule as extractFeatured) —
+		// "Song With You" is a different song, not "Song" plus a guest.
+		{"Song With You", "Song"},
 	}
 	for _, c := range wrong {
 		if s := scoreRef(c.ref, []string{"blink-182"}, "whatever", 200000, lm(c.local, "blink‐182", "Greatest Hits", 200)); s >= 0.5 {

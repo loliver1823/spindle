@@ -206,12 +206,13 @@ var versionCruftTokens = map[string]bool{
 }
 
 // titleContainmentIsVersionOnly reports whether `longer` is just `shorter`
-// plus version cruft. A "feat"/"ft"/"featuring"/"with" token accepts the rest
-// (guest names follow).
+// plus version cruft. A "feat"/"ft"/"featuring" token accepts the rest (guest
+// names follow). "with" is NOT a marker — same rule as extractFeatured in
+// library.go: too many real titles/names contain it.
 func titleContainmentIsVersionOnly(shorter, longer string) bool {
 	rest := strings.Replace(longer, shorter, " ", 1)
 	for _, tok := range strings.Fields(rest) {
-		if tok == "feat" || tok == "ft" || tok == "featuring" || tok == "with" {
+		if tok == "feat" || tok == "ft" || tok == "featuring" {
 			return true
 		}
 		if !versionCruftTokens[tok] {

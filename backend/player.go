@@ -14,11 +14,13 @@ import (
 	"image"
 	"image/jpeg"
 	_ "image/png"
+	"io"
 	"math"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -99,15 +101,76 @@ func MediaHTTPHandler() http.Handler {
 				http.Error(w, fmt.Sprintf("transcode failed: %v", err), http.StatusInternalServerError)
 				return
 			}
-			w.Header().Set("Content-Type", "audio/flac")
-			http.ServeFile(w, r, tp)
+			serveAudioChunked(w, r, tp, "audio/flac")
 			return
 		}
-		if ct := mediaContentTypes[ext]; ct != "" {
-			w.Header().Set("Content-Type", ct)
-		}
-		http.ServeFile(w, r, p)
+		serveAudioChunked(w, r, p, mediaContentTypes[ext])
 	})
+}
+
+// Largest byte span returned for a single media Range request. The Wails
+// asset-server bridge buffers each handler response in memory before WebView2
+// sees any of it, so answering "bytes=0-" with a whole 40 MB FLAC stalls
+// playback ~a second on every track start. Capping the span makes Chromium
+// fetch the file in quick successive chunks instead — first audio is nearly
+// immediate and seeks stay cheap.
+const mediaChunkMax = 1 << 20
+
+var reByteRange = regexp.MustCompile(`^bytes=(\d+)-(\d*)$`)
+
+func serveAudioChunked(w http.ResponseWriter, r *http.Request, path, contentType string) {
+	m := reByteRange.FindStringSubmatch(r.Header.Get("Range"))
+	if m == nil {
+		// No (or exotic) Range header — HEAD probes, prefetches. ServeFile
+		// handles those fine; media elements always send a byte range.
+		if contentType != "" {
+			w.Header().Set("Content-Type", contentType)
+		}
+		http.ServeFile(w, r, path)
+		return
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	size := st.Size()
+	start, _ := strconv.ParseInt(m[1], 10, 64)
+	if start >= size {
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", size))
+		http.Error(w, "range out of bounds", http.StatusRequestedRangeNotSatisfiable)
+		return
+	}
+	end := size - 1
+	if m[2] != "" {
+		if e, err := strconv.ParseInt(m[2], 10, 64); err == nil && e < end {
+			end = e
+		}
+	}
+	if end-start+1 > mediaChunkMax {
+		end = start + mediaChunkMax - 1
+	}
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Accept-Ranges", "bytes")
+	w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, size))
+	w.Header().Set("Content-Length", strconv.FormatInt(end-start+1, 10))
+	w.WriteHeader(http.StatusPartialContent)
+	if r.Method == http.MethodHead {
+		return
+	}
+	if _, err := f.Seek(start, 0); err != nil {
+		return
+	}
+	io.CopyN(w, f, end-start+1)
 }
 
 // --- Cover thumbnails -----------------------------------------------------

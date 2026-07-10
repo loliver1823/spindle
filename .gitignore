@@ -73,3 +73,9 @@ android-app/app/src/main/jniLibs/
 
 # Local Claude Code guidance
 CLAUDE.md
+
+# Local launch shortcut
+Kazoo.lnk
+
+# Playwright MCP session artifacts
+.playwright-mcp/

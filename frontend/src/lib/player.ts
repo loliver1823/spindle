@@ -1,8 +1,9 @@
 import { useSyncExternalStore } from "react";
 
-// Global music player: one <audio> element streaming from the backend's
-// /media/{id} endpoint. Codecs the WebView can't decode natively are retried
-// with ?transcode=1 (FFmpeg → FLAC server-side), so every format plays.
+// Global music player: two <audio> elements streaming from the backend's
+// /media/{id} endpoint — one playing, one preloading the predicted next track
+// so transitions swap instantly. Codecs the WebView can't decode natively are
+// retried with ?transcode=1 (FFmpeg → FLAC server-side), so every format plays.
 
 export type PlayerTrack = {
     id: number;
@@ -70,47 +71,72 @@ export function usePlayer(): PlayerState {
     );
 }
 
-// --- audio element ------------------------------------------------------------
+// --- audio elements -------------------------------------------------------
+// Two elements: one plays, the other preloads the predicted next track so a
+// transition is an instant swap instead of a fresh network load + buffer.
 
-const audio = new Audio();
-audio.preload = "auto";
-audio.volume = state.volume;
+const players = [new Audio(), new Audio()];
+let activeIdx = 0;
+function act(): HTMLAudioElement { return players[activeIdx]; }
+function standby(): HTMLAudioElement { return players[1 - activeIdx]; }
+
 let triedTranscode = false;
+// What the standby element currently holds: queue index + uid it was preloaded
+// for (uid guards against queue mutations reusing an index), or null.
+let preloaded: { index: number; uid: number; failed: boolean } | null = null;
+// Shuffle's next pick is decided at preload time so the preload is what
+// actually plays.
+let shuffleNext: number | null = null;
 const history: number[] = []; // indexes played, for prev under shuffle
 
-audio.addEventListener("timeupdate", () => {
-    // Avoid re-render storms: only emit when the displayed second changes.
-    const pos = audio.currentTime;
-    if (Math.floor(pos) !== Math.floor(state.position)) set({ position: pos });
-    else state = { ...state, position: pos };
-});
-audio.addEventListener("durationchange", () => {
-    if (Number.isFinite(audio.duration)) set({ duration: audio.duration });
-});
-audio.addEventListener("play", () => set({ playing: true }));
-audio.addEventListener("pause", () => set({ playing: false }));
-audio.addEventListener("waiting", () => set({ loading: true }));
-audio.addEventListener("canplay", () => set({ loading: false }));
-audio.addEventListener("ended", () => {
-    if (state.repeat === "one") {
-        audio.currentTime = 0;
-        void audio.play();
-        return;
-    }
-    next(true);
-});
-audio.addEventListener("error", () => {
-    // Native decode failed (e.g. ALAC in .m4a) — retry via server transcode.
-    const t = current();
-    if (t && !triedTranscode) {
-        triedTranscode = true;
-        set({ loading: true });
-        audio.src = `/media/${t.id}?transcode=1`;
-        void audio.play();
-    } else {
-        set({ playing: false, loading: false });
-    }
-});
+for (const el of players) {
+    el.preload = "auto";
+    el.volume = state.volume;
+}
+
+function attachActiveListeners(el: HTMLAudioElement) {
+    const ifActive = (fn: () => void) => () => { if (el === act()) fn(); };
+    el.addEventListener("timeupdate", ifActive(() => {
+        // Avoid re-render storms: only emit when the displayed second changes.
+        const pos = el.currentTime;
+        if (Math.floor(pos) !== Math.floor(state.position)) set({ position: pos });
+        else state = { ...state, position: pos };
+    }));
+    el.addEventListener("durationchange", ifActive(() => {
+        if (Number.isFinite(el.duration)) set({ duration: el.duration });
+    }));
+    el.addEventListener("play", ifActive(() => set({ playing: true })));
+    el.addEventListener("pause", ifActive(() => set({ playing: false })));
+    el.addEventListener("waiting", ifActive(() => set({ loading: true })));
+    el.addEventListener("canplay", ifActive(() => set({ loading: false })));
+    el.addEventListener("ended", ifActive(() => {
+        if (state.repeat === "one") {
+            el.currentTime = 0;
+            void el.play();
+            return;
+        }
+        next(true);
+    }));
+    el.addEventListener("error", () => {
+        if (el !== act()) {
+            // Preload failed (e.g. codec probe) — the swap path will fall
+            // back to a normal load.
+            if (preloaded) preloaded.failed = true;
+            return;
+        }
+        // Native decode failed (e.g. ALAC in .m4a) — retry via server transcode.
+        const t = current();
+        if (t && !triedTranscode) {
+            triedTranscode = true;
+            set({ loading: true });
+            el.src = `/media/${t.id}?transcode=1`;
+            void el.play();
+        } else {
+            set({ playing: false, loading: false });
+        }
+    });
+}
+players.forEach(attachActiveListeners);
 
 function current(): PlayerTrack | null {
     return state.index >= 0 && state.index < state.queue.length ? state.queue[state.index] : null;
@@ -119,12 +145,40 @@ function current(): PlayerTrack | null {
 // Codecs the WebView decodes natively; anything else streams via transcode.
 const NATIVE_CODECS = new Set(["mp3", "flac", "wav", "ogg", "oga", "opus", "aac", "m4a", "webm", "mp4"]);
 
-// Warm the transcode cache for the upcoming track so skipping to it is
-// instant instead of waiting on a full FFmpeg pass.
-function prefetchNext(index: number) {
-    const n = state.queue[index + 1];
-    if (!n?.codec || NATIVE_CODECS.has(n.codec.toLowerCase())) return;
-    fetch(`/media/${n.id}?transcode=1`, { method: "HEAD" }).catch(() => { });
+function mediaURL(t: PlayerTrack): string {
+    return t.codec && !NATIVE_CODECS.has(t.codec.toLowerCase()) ? `/media/${t.id}?transcode=1` : `/media/${t.id}`;
+}
+
+// predictNext mirrors next()'s choice so the preload is what actually plays.
+function predictNext(from: number): number | null {
+    const n = state.queue.length;
+    if (n === 0) return null;
+    if (state.shuffle && n > 1) {
+        if (shuffleNext === null || shuffleNext === from || shuffleNext >= n) {
+            do { shuffleNext = Math.floor(Math.random() * n); } while (shuffleNext === from);
+        }
+        return shuffleNext;
+    }
+    const ni = from + 1;
+    if (ni >= n) return state.repeat === "all" ? 0 : null;
+    return ni;
+}
+
+// preloadNext points the standby element at the predicted next track. Also
+// warms the transcode cache when that track needs FFmpeg.
+function preloadNext(from: number) {
+    const ni = predictNext(from);
+    const t = ni !== null ? state.queue[ni] : null;
+    if (ni === null || !t) {
+        preloaded = null;
+        standby().removeAttribute("src");
+        return;
+    }
+    if (preloaded && !preloaded.failed && preloaded.index === ni && preloaded.uid === t.uid) return;
+    preloaded = { index: ni, uid: t.uid ?? -1, failed: false };
+    const el = standby();
+    el.src = mediaURL(t);
+    el.load();
 }
 
 function loadAndPlay(index: number) {
@@ -132,11 +186,27 @@ function loadAndPlay(index: number) {
     if (!t) return;
     history.push(state.index);
     triedTranscode = false;
-    set({ index, position: 0, duration: t.duration, loading: true });
-    audio.src = t.codec && !NATIVE_CODECS.has(t.codec.toLowerCase()) ? `/media/${t.id}?transcode=1` : `/media/${t.id}`;
-    void audio.play();
+    shuffleNext = null;
+
+    const pre = preloaded;
+    preloaded = null;
+    if (pre && !pre.failed && pre.index === index && pre.uid === (t.uid ?? -1)) {
+        // The standby element already buffered this track — instant swap.
+        const old = act();
+        old.pause();
+        old.removeAttribute("src");
+        activeIdx = 1 - activeIdx;
+        const el = act();
+        if (el.currentTime > 0) el.currentTime = 0;
+        set({ index, position: 0, duration: t.duration, loading: false });
+        void el.play();
+    } else {
+        set({ index, position: 0, duration: t.duration, loading: true });
+        act().src = mediaURL(t);
+        void act().play();
+    }
     updateMediaSession(t);
-    prefetchNext(index);
+    preloadNext(index);
 }
 
 function updateMediaSession(t: PlayerTrack) {
@@ -168,7 +238,7 @@ export function addToQueue(tracks: PlayerTrack[]) {
     const wasEmpty = state.queue.length === 0;
     state = { ...state, queue: [...state.queue, ...withUids(tracks)] };
     if (wasEmpty) loadAndPlay(0);
-    else emit();
+    else { emit(); preloadNext(state.index); }
 }
 
 // Reorder the queue (drag & drop); the now-playing pointer follows its track.
@@ -183,39 +253,35 @@ export function moveInQueue(from: number, to: number) {
     else if (from < index && to >= index) index--;
     else if (from > index && to <= index) index++;
     set({ queue: q, index });
+    preloadNext(index);
 }
 
 export function toggle() {
     if (!current()) return;
-    if (audio.paused) void audio.play();
-    else audio.pause();
+    if (act().paused) void act().play();
+    else act().pause();
 }
 
 export function next(fromEnded = false) {
-    const n = state.queue.length;
-    if (n === 0) return;
-    let ni: number;
-    if (state.shuffle && n > 1) {
-        do { ni = Math.floor(Math.random() * n); } while (ni === state.index);
-    } else {
-        ni = state.index + 1;
-        if (ni >= n) {
-            if (state.repeat === "all") ni = 0;
-            else { if (fromEnded) set({ playing: false }); return; }
-        }
+    // predictNext is what the standby element preloaded — using it here is
+    // what makes the transition an instant swap (incl. the shuffle pick).
+    const ni = predictNext(state.index);
+    if (ni === null) {
+        if (fromEnded) set({ playing: false });
+        return;
     }
     loadAndPlay(ni);
 }
 
 export function prev() {
-    if (audio.currentTime > 3) { audio.currentTime = 0; return; }
+    if (act().currentTime > 3) { act().currentTime = 0; return; }
     const last = history.pop();
     const back = last !== undefined && last >= 0 ? last : state.index - 1;
     if (back >= 0 && back < state.queue.length) {
         history.pop(); // loadAndPlay will re-push
         loadAndPlay(back);
     } else {
-        audio.currentTime = 0;
+        act().currentTime = 0;
     }
 }
 
@@ -232,6 +298,7 @@ export function removeFromQueue(index: number) {
         loadAndPlay(Math.min(index, q.length - 1));
     } else {
         set({ queue: q, index: index < state.index ? state.index - 1 : state.index });
+        preloadNext(state.index);
     }
 }
 
@@ -240,36 +307,43 @@ export function clearQueue() {
 }
 
 function stop() {
-    audio.pause();
-    audio.removeAttribute("src");
+    for (const el of players) {
+        el.pause();
+        el.removeAttribute("src");
+    }
+    preloaded = null;
+    shuffleNext = null;
     history.length = 0;
     set({ queue: [], index: -1, playing: false, loading: false, position: 0, duration: 0 });
 }
 
 export function seekTo(seconds: number) {
     if (!current()) return;
-    audio.currentTime = Math.max(0, Math.min(seconds, state.duration || audio.duration || 0));
-    set({ position: audio.currentTime });
+    act().currentTime = Math.max(0, Math.min(seconds, state.duration || act().duration || 0));
+    set({ position: act().currentTime });
 }
 
 export function seekFrac(frac: number) {
-    const d = state.duration || audio.duration || 0;
+    const d = state.duration || act().duration || 0;
     if (d > 0) seekTo(frac * d);
 }
 
 export function setVolume(v: number) {
     const vol = Math.max(0, Math.min(1, v));
-    audio.volume = vol;
+    for (const el of players) el.volume = vol;
     localStorage.setItem(VOLUME_KEY, String(vol));
     set({ volume: vol });
 }
 
 export function toggleShuffle() {
     set({ shuffle: !state.shuffle });
+    shuffleNext = null;
+    preloadNext(state.index);
 }
 
 export function cycleRepeat() {
     set({ repeat: state.repeat === "off" ? "all" : state.repeat === "all" ? "one" : "off" });
+    preloadNext(state.index);
 }
 
 // Convenience: map a backend LibraryTrack-shaped object to a PlayerTrack.

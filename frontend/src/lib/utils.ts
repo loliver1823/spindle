@@ -46,10 +46,15 @@ export function openExternal(url: string) {
 export function plural(count: number, noun: string): string {
     return `${count.toLocaleString()} ${noun}${count === 1 ? "" : "s"}`;
 }
+// First artist out of a joined credit string, for the "use first artist only"
+// download setting. Splits on ";" (the tag separator), Spotify's ", " join and
+// feat markers — never on "&" or "/", which live inside real names (AC/DC,
+// Simon & Garfunkel). A band name containing ", " still truncates; that's
+// inherent to flat joined strings and the setting is an explicit opt-in.
 export function getFirstArtist(artistString: string): string {
     if (!artistString)
         return artistString;
-    const delimiters = /\s*;\s*|\s+\/\s+|[,&]|\s+(?:feat\.?|ft\.?|featuring)\s+/i;
+    const delimiters = /\s*;\s*|,\s+|\s+(?:feat\.?|ft\.?|featuring)\s+/i;
     const parts = artistString.split(delimiters);
     return parts[0].trim();
 }
