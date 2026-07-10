@@ -244,44 +244,6 @@ func checkQobuzAvailability(isrc string) (bool, string) {
 	return true, qobuzURL
 }
 
-func (s *SongLinkClient) GetDeezerURLFromSpotify(spotifyTrackID string) (string, error) {
-	links, err := s.resolveSpotifyTrackLinks(spotifyTrackID, "")
-	if links != nil && links.DeezerURL != "" {
-		deezerURL := normalizeDeezerTrackURL(links.DeezerURL)
-		Dbgf("Found Deezer URL: %s\n", deezerURL)
-		return deezerURL, nil
-	}
-
-	isrc := ""
-	if links != nil {
-		isrc = strings.TrimSpace(links.ISRC)
-	}
-	if isrc == "" {
-		fallbackISRC, lookupErr := s.lookupSpotifyISRC(spotifyTrackID)
-		if lookupErr == nil {
-			isrc = fallbackISRC
-		} else if err == nil {
-			err = lookupErr
-		}
-	}
-
-	if isrc != "" {
-		deezerURL, deezerErr := s.lookupDeezerTrackURLByISRC(isrc)
-		if deezerErr == nil {
-			Dbgf("Found Deezer URL: %s\n", deezerURL)
-			return deezerURL, nil
-		}
-		if err == nil {
-			err = deezerErr
-		}
-	}
-
-	if err != nil {
-		return "", err
-	}
-	return "", fmt.Errorf("deezer link not found")
-}
-
 func getDeezerISRC(deezerURL string) (string, error) {
 	trackID, err := extractDeezerTrackID(deezerURL)
 	if err != nil {

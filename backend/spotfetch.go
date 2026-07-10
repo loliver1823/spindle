@@ -45,10 +45,6 @@ func NewSpotifyClient() *SpotifyClient {
 	}
 }
 
-func (c *SpotifyClient) generateTOTP() (string, int, error) {
-	return generateSpotifyTOTP(time.Now())
-}
-
 func (c *SpotifyClient) requestAccessTokenAt(now time.Time) (map[string]interface{}, []*http.Cookie, error) {
 	totpCode, version, err := generateSpotifyTOTP(now)
 	if err != nil {
@@ -394,16 +390,6 @@ func getSlice(m map[string]interface{}, key string) []interface{} {
 func getFloat64(m map[string]interface{}, key string) float64 {
 	if val, ok := m[key].(float64); ok {
 		return val
-	}
-	return 0
-}
-
-func getInt(m map[string]interface{}, key string) int {
-	if val, ok := m[key].(int); ok {
-		return val
-	}
-	if val, ok := m[key].(float64); ok {
-		return int(val)
 	}
 	return 0
 }

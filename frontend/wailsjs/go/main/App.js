@@ -386,6 +386,10 @@ export function GetTrackCredits(arg1) {
   return window['go']['main']['App']['GetTrackCredits'](arg1);
 }
 
+export function GetTrackDetails(arg1) {
+  return window['go']['main']['App']['GetTrackDetails'](arg1);
+}
+
 export function GetTrackISRC(arg1) {
   return window['go']['main']['App']['GetTrackISRC'](arg1);
 }
@@ -496,6 +500,10 @@ export function ReadTextFile(arg1) {
 
 export function RefreshArtistMetadata(arg1) {
   return window['go']['main']['App']['RefreshArtistMetadata'](arg1);
+}
+
+export function RefreshTrackMetadata(arg1) {
+  return window['go']['main']['App']['RefreshTrackMetadata'](arg1);
 }
 
 export function RemoveDownloadItems(arg1) {

@@ -104,9 +104,42 @@ type localMatchTrack struct {
 	normTitle     string
 	normTitleCore string
 	variantSig    string
+	featNames     []string
 	normArtists   map[string]bool
 	normAlbum     string
 	durationMs    int64
+}
+
+var reFeatClause = regexp.MustCompile(`(?i)\b(?:feat|ft|featuring)\.?\s+([^()\[\]]+)`)
+
+// extractFeatNames pulls the guest names out of a title's feat clause
+// ("Anti-Hero (feat. Bleachers)" → ["bleachers"]), normalized for matching.
+func extractFeatNames(raw string) []string {
+	m := reFeatClause.FindStringSubmatch(raw)
+	if m == nil {
+		return nil
+	}
+	seg := m[1]
+	if i := strings.Index(seg, " - "); i >= 0 {
+		seg = seg[:i]
+	}
+	seg = strings.NewReplacer(" and ", "|", " x ", "|", "&", "|", ",", "|").Replace(seg)
+	var out []string
+	for _, p := range strings.Split(seg, "|") {
+		if n := normalizeMatch(p); n != "" {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+func artistSetContains(set map[string]bool, name string) bool {
+	for a := range set {
+		if containsEither(a, name) {
+			return true
+		}
+	}
+	return false
 }
 
 func loadLocalForMatch() ([]localMatchTrack, error) {
@@ -139,6 +172,7 @@ func loadLocalForMatch() ([]localMatchTrack, error) {
 				normTitle:     normalizeMatch(t.Title),
 				normTitleCore: normalizeMatch(stripVersionTail(t.Title)),
 				variantSig:    variantSignature(t.Title),
+				featNames:     extractFeatNames(t.Title),
 				normArtists:   map[string]bool{},
 				normAlbum:     normalizeMatch(t.Album),
 				durationMs:    int64(t.Duration) * 1000,
@@ -159,23 +193,79 @@ func containsEither(a, b string) bool {
 	return a == b || (a != "" && strings.Contains(b, a)) || (b != "" && strings.Contains(a, b))
 }
 
-func scoreMatch(refTitle, refTitleCore, refVariantSig string, refArtists map[string]bool, refAlbum string, refDur int64, l *localMatchTrack) float64 {
+// Words that may legitimately trail a title without making it a different
+// song ("Down Single Version", "Dammit Remastered"). Anything else left over
+// after a substring title match — "part 2", "song 2" — is a real word from a
+// DIFFERENT song's title.
+var versionCruftTokens = map[string]bool{
+	"version": true, "single": true, "edit": true, "radio": true,
+	"remaster": true, "remastered": true, "anniversary": true, "deluxe": true,
+	"expanded": true, "edition": true, "original": true, "album": true,
+	"mono": true, "stereo": true, "explicit": true, "clean": true,
+	"bonus": true, "track": true, "digital": true, "the": true,
+}
+
+// titleContainmentIsVersionOnly reports whether `longer` is just `shorter`
+// plus version cruft. A "feat"/"ft"/"featuring"/"with" token accepts the rest
+// (guest names follow).
+func titleContainmentIsVersionOnly(shorter, longer string) bool {
+	rest := strings.Replace(longer, shorter, " ", 1)
+	for _, tok := range strings.Fields(rest) {
+		if tok == "feat" || tok == "ft" || tok == "featuring" || tok == "with" {
+			return true
+		}
+		if !versionCruftTokens[tok] {
+			return false
+		}
+	}
+	return true
+}
+
+func scoreMatch(refTitle, refTitleCore, refVariantSig string, refFeat []string, refArtists map[string]bool, refAlbum string, refDur int64, l *localMatchTrack) float64 {
 	var score float64
 	// Title (0.4) — but a live/remix/acoustic marker on one side only means a
 	// different recording: no title credit at all, however similar the names.
+	titleScore := 0.0
 	if refVariantSig != l.variantSig {
-		// score += 0
+		// titleScore stays 0
 	} else if refTitle == l.normTitle {
-		score += 0.4
+		titleScore = 0.4
 	} else if refTitleCore != "" && refTitleCore == l.normTitleCore {
 		// Same song, different version qualifier ("Down - Single Version" vs
 		// "Down") — near-exact so it survives even without album agreement.
-		score += 0.35
-	} else if l.normTitle != "" && (strings.Contains(l.normTitle, refTitle) || strings.Contains(refTitle, l.normTitle)) {
-		score += 0.25
+		titleScore = 0.35
+	} else if l.normTitle != "" && refTitle != "" && strings.Contains(l.normTitle, refTitle) && titleContainmentIsVersionOnly(refTitle, l.normTitle) {
+		// "Anthem" ⊄ "Anthem Part Two": containment only counts when the
+		// leftover words are version qualifiers, not another song's title.
+		titleScore = 0.25
+	} else if l.normTitle != "" && refTitle != "" && strings.Contains(refTitle, l.normTitle) && titleContainmentIsVersionOnly(l.normTitle, refTitle) {
+		titleScore = 0.25
 	} else if strings.ReplaceAll(refTitle, " ", "") == strings.ReplaceAll(l.normTitle, " ", "") {
-		score += 0.2
+		titleScore = 0.2
 	}
+	// A different song by the same artist can rack up artist+duration points
+	// (0.5 — the acceptance threshold), so titles that share nothing are an
+	// immediate non-match.
+	if titleScore == 0 {
+		return 0
+	}
+	// Feat guard: "Anti-Hero (feat. Bleachers)" is a different recording from
+	// "Anti-Hero" — the cores match, but a guest named on one side who isn't
+	// credited on the other means a remix/alternate version. (Exact-equal
+	// titles carry the same feat text, so only the loose paths need this.)
+	if refTitle != l.normTitle {
+		for _, f := range refFeat {
+			if !artistSetContains(l.normArtists, f) && !strings.Contains(l.normTitle, f) {
+				return 0
+			}
+		}
+		for _, f := range l.featNames {
+			if !artistSetContains(refArtists, f) && !strings.Contains(refTitle, f) {
+				return 0
+			}
+		}
+	}
+	score += titleScore
 	// Artist overlap (0.4)
 	if len(refArtists) == 0 {
 		score += 0.4
@@ -228,6 +318,7 @@ func MatchPlaylistTracks(refs []SpotifyTrackRef) ([]MatchedTrack, error) {
 		refTitle := normalizeMatch(ref.Name)
 		refTitleCore := normalizeMatch(stripVersionTail(ref.Name))
 		refVariantSig := variantSignature(ref.Name)
+		refFeat := extractFeatNames(ref.Name)
 		refArtists := map[string]bool{}
 		for _, a := range ref.ArtistNames {
 			if n := normalizeMatch(a); n != "" {
@@ -239,7 +330,7 @@ func MatchPlaylistTracks(refs []SpotifyTrackRef) ([]MatchedTrack, error) {
 		var best *LibraryTrack
 		bestScore := 0.0
 		for i := range locals {
-			s := scoreMatch(refTitle, refTitleCore, refVariantSig, refArtists, refAlbum, ref.DurationMs, &locals[i])
+			s := scoreMatch(refTitle, refTitleCore, refVariantSig, refFeat, refArtists, refAlbum, ref.DurationMs, &locals[i])
 			if s > bestScore && s >= 0.5 {
 				bestScore = s
 				best = &locals[i].track

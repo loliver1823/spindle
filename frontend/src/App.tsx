@@ -232,7 +232,7 @@ function App() {
             setSpotifyUrl(updatedUrl);
         }
     };
-    // Bridge from other pages (e.g. a "This Is â€¦" playlist on a library
+    // Bridge from other pages (e.g. a "This Is ..." playlist on a library
     // artist page): switch to the Download page and fetch the URL.
     useEffect(() => {
         const onFetch = (e: Event) => {

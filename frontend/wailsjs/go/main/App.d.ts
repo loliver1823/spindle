@@ -195,6 +195,8 @@ export function GetTrackAudioInfo(arg1:number):Promise<backend.TrackAudioInfo>;
 
 export function GetTrackCredits(arg1:string):Promise<Array<backend.Credit>>;
 
+export function GetTrackDetails(arg1:number):Promise<backend.TrackDetails>;
+
 export function GetTrackISRC(arg1:string):Promise<string>;
 
 export function GetTrackWaveform(arg1:number):Promise<Array<number>>;
@@ -250,6 +252,8 @@ export function ReadImageAsBase64(arg1:string):Promise<string>;
 export function ReadTextFile(arg1:string):Promise<string>;
 
 export function RefreshArtistMetadata(arg1:string):Promise<backend.EnrichResult>;
+
+export function RefreshTrackMetadata(arg1:Array<number>):Promise<number>;
 
 export function RemoveDownloadItems(arg1:Array<string>):Promise<void>;
 

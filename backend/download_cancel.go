@@ -3,7 +3,6 @@ package backend
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 )
@@ -77,13 +76,6 @@ func ForceStopActiveDownloads() {
 	SetDownloading(false)
 }
 
-func IsDownloadForceStopRequested() bool {
-	downloadCancelState.Lock()
-	defer downloadCancelState.Unlock()
-
-	return downloadCancelState.stopping
-}
-
 func CheckDownloadCancelled() error {
 	ctx := ActiveDownloadContext()
 	select {
@@ -116,14 +108,4 @@ func IsDownloadCancelledError(err error) bool {
 		return false
 	}
 	return errors.Is(err, ErrDownloadCancelled) || errors.Is(err, context.Canceled)
-}
-
-func WrapDownloadCancelled(err error) error {
-	if err == nil {
-		return nil
-	}
-	if IsDownloadForceStopRequested() || errors.Is(err, context.Canceled) {
-		return fmt.Errorf("%w", ErrDownloadCancelled)
-	}
-	return err
 }

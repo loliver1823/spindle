@@ -41,13 +41,3 @@ func SelectMultipleFiles(ctx context.Context) ([]string, error) {
 	}
 	return files, nil
 }
-
-func SelectOutputDirectory(ctx context.Context) (string, error) {
-	dir, err := runtime.OpenDirectoryDialog(ctx, runtime.OpenDialogOptions{
-		Title: "Select Output Directory",
-	})
-	if err != nil {
-		return "", err
-	}
-	return dir, nil
-}

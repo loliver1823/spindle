@@ -288,7 +288,6 @@ export function PlayerBar() {
     return (
         <div className="fixed bottom-0 left-14 right-0 z-40 h-[88px] border-t bg-background/95 backdrop-blur grid items-center px-4"
             style={{ gridTemplateColumns: "minmax(180px, 30%) 1fr minmax(180px, 30%)" }}>
-            {/* now playing */}
             <div className="flex items-center gap-3 min-w-0 pr-4">
                 <div className="h-14 w-14 rounded-md overflow-hidden bg-muted shrink-0 shadow">
                     {!coverFailed
@@ -304,7 +303,6 @@ export function PlayerBar() {
                 </div>
             </div>
 
-            {/* center: transport above seek bar */}
             <div className="flex flex-col items-center justify-center gap-1 min-w-0 max-w-2xl w-full mx-auto">
                 <div className="flex items-center gap-2">
                     <Button variant="ghost" size="icon" className={`h-8 w-8 ${p.shuffle ? "text-primary" : "text-muted-foreground hover:text-foreground"}`} onClick={toggleShuffle} title="Shuffle">
@@ -332,7 +330,6 @@ export function PlayerBar() {
                 </div>
             </div>
 
-            {/* right: queue + volume */}
             <div className="flex items-center justify-end gap-2 pl-4">
                 <Button variant="ghost" size="icon" className={`h-8 w-8 ${queueOpen ? "text-primary" : "text-muted-foreground hover:text-foreground"}`} title="Queue" data-queue-toggle
                     onClick={() => setQueueOpen((o) => !o)}>

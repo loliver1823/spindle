@@ -1532,10 +1532,6 @@ func cleanPathParts(path string) []string {
 	return parts
 }
 
-func parseArtistIDsFromString(artists string) []string {
-	return []string{}
-}
-
 func splitAndCleanArtists(artists string) []string {
 	raw := regexp.MustCompile(`\s*[;,]\s*`).Split(strings.TrimSpace(artists), -1)
 	parts := make([]string, 0, len(raw))

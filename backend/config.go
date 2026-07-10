@@ -191,15 +191,6 @@ func GetRedownloadWithSuffixSetting() bool {
 	return enabled
 }
 
-func GetCustomTidalAPISetting() string {
-	settings, err := LoadConfigSettings()
-	if err != nil || settings == nil {
-		return ""
-	}
-
-	return normalizeCustomTidalAPIValue(settings["customTidalApi"])
-}
-
 func normalizeExistingFileCheckMode(value string) string {
 	switch strings.TrimSpace(strings.ToLower(value)) {
 	case "isrc", "upc":

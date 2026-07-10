@@ -961,25 +961,3 @@ func pcmSampleFormatForInput(inputFile string) (sampleFmt string, rawBits int) {
 	}
 	return "s16", 0
 }
-
-type AudioFileInfo struct {
-	Path     string `json:"path"`
-	Filename string `json:"filename"`
-	Format   string `json:"format"`
-	Size     int64  `json:"size"`
-}
-
-func GetAudioFileInfo(filePath string) (*AudioFileInfo, error) {
-	info, err := os.Stat(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(filePath), "."))
-	return &AudioFileInfo{
-		Path:     filePath,
-		Filename: filepath.Base(filePath),
-		Format:   ext,
-		Size:     info.Size(),
-	}, nil
-}

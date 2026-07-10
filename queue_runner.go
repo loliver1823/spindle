@@ -478,6 +478,32 @@ func (a *App) processQueueItem(item backend.DownloadItem) {
 		}
 	}
 
+	// Auto downloads from the source the quality badge showed — what you see
+	// is what you get. A different source is only used when the user picks
+	// one in the download screen's dropdown (item.Service, handled above),
+	// or when there's no badge to honor (probe found nothing) — then the
+	// configured source order decides.
+	if item.SpotifyID != "" {
+		if q, err := backend.GetBestTrackQuality(item.SpotifyID); err == nil && q.Found && q.Source != "" {
+			svc := strings.ToLower(q.Source)
+			serviceURL := ""
+			if svc == "tidal" || svc == "amazon" {
+				ensureURLs()
+				if urls != nil {
+					if svc == "tidal" {
+						serviceURL = urls.TidalURL
+					} else {
+						serviceURL = urls.AmazonURL
+					}
+				}
+			}
+			backend.Dbgf("auto: downloading from badge source %s (%s)\n", q.Source, q.Label)
+			resp := tryService(svc, serviceURL)
+			finish(resp, resp.Error, 1)
+			return
+		}
+	}
+
 	lastErr := ""
 	tried := 0
 	var lastResp DownloadResponse

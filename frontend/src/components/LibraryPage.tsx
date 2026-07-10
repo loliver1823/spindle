@@ -17,7 +17,7 @@ import {
     GetArtistArtCandidates, GetAlbumArtCandidates, GetArtistSpotifyPlaylists,
     WriteBulkTrackMetadata, TrackIDsForAlbums, TrackIDsForArtists, GetImageInfo, EmbedCoverFromSource, SelectFile, GetPlaylists,
     GetPlaylistTracks, CreatePlaylist, RenamePlaylist, DeletePlaylist, AddTracksToPlaylist, RemoveTrackFromPlaylist, SelectFolder,
-    FindLibraryAlbum, GetArtistNewReleases, DeleteLibraryTracks,
+    FindLibraryAlbum, GetArtistNewReleases, DeleteLibraryTracks, GetTrackDetails, RefreshTrackMetadata, OpenFolder,
     ListSyncedPlaylists, RemoveSyncedPlaylist, SyncSpotifyPlaylist,
 } from "../../wailsjs/go/main/App";
 import { openSpotifyPlaylistView } from "@/components/PlaylistSyncPage";
@@ -386,6 +386,7 @@ export function LibraryPage() {
     // Delete = remove from library AND delete files from disk (with the
     // watcher auto-scanning, "remove from library only" would just re-add).
     const [confirmDelete, setConfirmDelete] = useState<{ ids: number[]; label: string } | null>(null);
+    const [infoTrackId, setInfoTrackId] = useState<number | null>(null);
     const [deleting, setDeleting] = useState(false);
     const openDeleteSelection = async () => {
         const keys = [...sel];
@@ -398,6 +399,35 @@ export function LibraryPage() {
         if (!ids.length) { toast.error("Nothing to delete"); return; }
         const noun = selKind === "albums" ? "album" : selKind === "artists" ? "artist" : "song";
         setConfirmDelete({ ids, label: `${sel.size} ${noun}${sel.size === 1 ? "" : "s"} (${ids.length} track${ids.length === 1 ? "" : "s"})` });
+    };
+    const queuePlaylist = async (p: Playlist) => {
+        try {
+            const ts = await GetPlaylistTracks(p.id);
+            if (!ts.length) { toast.info("Playlist is empty"); return; }
+            addToQueue(ts.map(toPlayerTrack));
+            toast.success(`Added ${plural(ts.length, "track")} to queue`);
+        } catch (e) { toast.error(`${e}`); }
+    };
+    const deleteArtist = async (name: string) => {
+        try {
+            const ids = await TrackIDsForArtists([name]);
+            if (!ids.length) { toast.error("No tracks for this artist"); return; }
+            setConfirmDelete({ ids, label: `"${name}" (${plural(ids.length, "track")})` });
+        } catch (e) { toast.error(`${e}`); }
+    };
+    const refreshTrackIds = async (ids: number[]) => {
+        if (!ids.length) { toast.info("No tracks to refresh"); return; }
+        try {
+            const n = await RefreshTrackMetadata(ids);
+            toast.success(`Refreshed metadata for ${plural(n, "track")}`);
+            load(); loadStats();
+        } catch (e) { toast.error(`${e}`); }
+    };
+    const refreshArtistTracks = async (name: string) => {
+        try { await refreshTrackIds(await TrackIDsForArtists([name])); } catch (e) { toast.error(`${e}`); }
+    };
+    const refreshAlbum = async (a: Album) => {
+        try { await refreshTrackIds(await TrackIDsForAlbums([a.id])); } catch (e) { toast.error(`${e}`); }
     };
     const deleteAlbum = async (a: Album) => {
         try {
@@ -449,6 +479,12 @@ export function LibraryPage() {
             case "metadata": setEditorIds([t.id]); break;
             case "queue": addToQueue([toPlayerTrack(t)]); toast.success("Added to queue"); break;
             case "delete": setConfirmDelete({ ids: [Number(t.id)], label: `"${t.title}"` }); break;
+            case "info": setInfoTrackId(Number(t.id)); break;
+            case "refresh":
+                RefreshTrackMetadata([Number(t.id)])
+                    .then(() => { toast.success("Metadata refreshed"); load(); loadStats(); })
+                    .catch((e) => toast.error(`${e}`));
+                break;
         }
     };
     const goArtist = (name: string) => { if (name) push({ kind: "artist", name }); };
@@ -696,7 +732,6 @@ export function LibraryPage() {
 
     return (
         <div className="flex flex-col h-full bg-background text-foreground relative">
-            {/* top bar */}
             <div className="flex items-center gap-3 px-6 pt-5 pb-3">
                 <h1 className="text-2xl font-bold tracking-tight">Your Library</h1>
                 {stats && (
@@ -748,7 +783,6 @@ export function LibraryPage() {
                 <div className="px-6 pb-1 text-xs text-muted-foreground">Scanning… {progress.done}{progress.total ? ` / ${progress.total}` : ""}</div>
             )}
 
-            {/* breadcrumb */}
             {stack.length > 1 && (
                 <div className="px-6 pb-2 flex items-center gap-1 text-sm">
                     <button onClick={back} className="mr-1 text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" /></button>
@@ -764,13 +798,12 @@ export function LibraryPage() {
                 </div>
             )}
 
-            {/* content */}
             <div className="flex-1 overflow-y-auto px-6 py-3">
                 {loading && <div className="flex items-center gap-2 text-sm text-muted-foreground py-6"><Spinner className="h-4 w-4" /> Loading…</div>}
 
                 {!loading && route.kind === "albums" && (
                     albums.length === 0 ? <Empty onOpen={() => setFoldersOpen(true)} /> :
-                        <AlbumGrid albums={albums} onOpen={(a) => push({ kind: "album", album: a })} onArtist={goArtist} onEdit={editAlbumMeta} onDelete={deleteAlbum}
+                        <AlbumGrid albums={albums} onOpen={(a) => push({ kind: "album", album: a })} onArtist={goArtist} onEdit={editAlbumMeta} onDelete={deleteAlbum} onRefresh={refreshAlbum}
                             selectedKeys={sel} onSelect={(i, e) => selectAt("albums", albums.map((a) => a.id), i, e)} onToggle={(key) => toggleOne("albums", key)} />
                 )}
 
@@ -794,6 +827,9 @@ export function LibraryPage() {
                                         <ContextMenuSeparator />
                                         <ContextMenuItem onSelect={() => setEditArtist(a.name)}><Pencil className="h-4 w-4 mr-2" /> Edit artist metadata</ContextMenuItem>
                                         <ContextMenuItem onSelect={() => setMatchArtist(a.name)}><Link2 className="h-4 w-4 mr-2" /> Fix match…</ContextMenuItem>
+                                        <ContextMenuItem onSelect={() => void refreshArtistTracks(a.name)}><RefreshCw className="h-4 w-4 mr-2" /> Refresh metadata</ContextMenuItem>
+                                        <ContextMenuSeparator />
+                                        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => void deleteArtist(a.name)}><Trash2 className="h-4 w-4 mr-2" /> Delete from library</ContextMenuItem>
                                     </ContextMenuContent>
                                 </ContextMenu>
                             ))}
@@ -832,7 +868,7 @@ export function LibraryPage() {
                                 </ContextMenuTrigger>
                                 <ContextMenuContent className="w-44">
                                     <ContextMenuItem onSelect={() => push({ kind: "playlist", playlist: p })}><ListMusic className="h-4 w-4 mr-2" /> Open</ContextMenuItem>
-                                    <ContextMenuItem onSelect={() => toast.warning("Play queue is coming soon")}><ListEnd className="h-4 w-4 mr-2" /> Add to queue</ContextMenuItem>
+                                    <ContextMenuItem onSelect={() => void queuePlaylist(p)}><ListEnd className="h-4 w-4 mr-2" /> Add to queue</ContextMenuItem>
                                     <ContextMenuSeparator />
                                     <ContextMenuItem onSelect={() => renamePlaylist(p)}><Pencil className="h-4 w-4 mr-2" /> Rename</ContextMenuItem>
                                     <ContextMenuItem onSelect={() => removePlaylist(p)}><Trash2 className="h-4 w-4 mr-2" /> Delete</ContextMenuItem>
@@ -973,6 +1009,7 @@ export function LibraryPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+            <TrackInfoDialog trackId={infoTrackId} onClose={() => setInfoTrackId(null)} />
             <TrackEditor ids={editorIds} onClose={() => setEditorIds(null)} onSaved={() => { bustArt(); clearSel(); load(); loadStats(); loadPlaylists(); }} />
             <MatchDialog name={matchArtist} onClose={() => setMatchArtist(null)} onMatched={() => {
                 bustArt(); setArtBust((b) => b + 1);
@@ -1013,9 +1050,65 @@ function QualityStamp({ codec, sampleRate, bitrate, className }: { codec?: strin
     );
 }
 
-function AlbumGrid({ albums, onOpen, onArtist, onEdit, onDelete, selectedKeys, onSelect, onToggle }: {
+function fmtBytes(n: number): string {
+    if (!n) return "\u2014";
+    const units = ["B", "KB", "MB", "GB"];
+    let v = n, u = 0;
+    while (v >= 1024 && u < units.length - 1) { v /= 1024; u++; }
+    return `${v.toFixed(v >= 100 || u === 0 ? 0 : 1)} ${units[u]}`;
+}
+
+// Plex-style "Get Info": the library row, file stats and the raw tag dump.
+function TrackInfoDialog({ trackId, onClose }: { trackId: number | null; onClose: () => void }) {
+    const [details, setDetails] = useState<backend.TrackDetails | null>(null);
+    useEffect(() => {
+        if (trackId == null) { setDetails(null); return; }
+        let alive = true;
+        GetTrackDetails(trackId).then((d) => { if (alive) setDetails(d); }).catch((e) => { toast.error(`${e}`); onClose(); });
+        return () => { alive = false; };
+    }, [trackId]); // eslint-disable-line react-hooks/exhaustive-deps
+    const t = details?.track;
+    const folder = t?.path ? t.path.replace(/[\\/][^\\/]*$/, "") : "";
+    const row = (label: string, value: ReactNode) => (
+        <div key={label} className="grid grid-cols-[130px_1fr] gap-2 py-1 text-sm border-b border-border/50 last:border-0">
+            <span className="text-muted-foreground">{label}</span>
+            <span className="min-w-0 break-all">{value}</span>
+        </div>
+    );
+    return (
+        <Dialog open={trackId != null} onOpenChange={(o) => { if (!o) onClose(); }}>
+            <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle className="truncate">{t ? t.title : "Track info"}</DialogTitle>
+                    <DialogDescription className="truncate">{t ? `${t.artist} \u2014 ${t.album}` : ""}</DialogDescription>
+                </DialogHeader>
+                {!details || !t ? <div className="py-8 flex justify-center"><Spinner /></div> : (
+                    <div className="space-y-4">
+                        <div>
+                            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">File</div>
+                            {row("Location", <button type="button" className="text-left underline-offset-2 hover:underline cursor-pointer" title="Open folder" onClick={() => { if (folder) void OpenFolder(folder); }}>{t.path}</button>)}
+                            {row("Size", fmtBytes(details.fileSize))}
+                            {row("Codec", `${(t.codec || "?").toUpperCase()}${t.sampleRate ? ` \u00b7 ${(t.sampleRate / 1000).toFixed(1)} kHz` : ""}${t.bitrate ? ` \u00b7 ${t.bitrate} kbps` : ""}`)}
+                            {row("Duration", fmtDur(t.duration))}
+                            {row("Modified", details.modified ? new Date(details.modified * 1000).toLocaleString() : "\u2014")}
+                            {row("Added", t.dateAdded ? new Date(t.dateAdded * 1000).toLocaleString() : "\u2014")}
+                            {row("Plays", `${t.playCount || 0}`)}
+                        </div>
+                        <div>
+                            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Tags</div>
+                            {Object.keys(details.tags || {}).sort().map((k) => row(k, (details.tags[k] || []).join("; ")))}
+                            {Object.keys(details.tags || {}).length === 0 && <div className="text-sm text-muted-foreground">No tags read</div>}
+                        </div>
+                    </div>
+                )}
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function AlbumGrid({ albums, onOpen, onArtist, onEdit, onDelete, onRefresh, selectedKeys, onSelect, onToggle }: {
     albums: Album[]; onOpen: (a: Album) => void; onArtist?: (name: string) => void; onEdit?: (a: Album) => void;
-    onDelete?: (a: Album) => void;
+    onDelete?: (a: Album) => void; onRefresh?: (a: Album) => void;
     selectedKeys?: Set<string>; onSelect?: (index: number, e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }) => void;
     onToggle?: (key: string) => void;
 }) {
@@ -1047,6 +1140,7 @@ function AlbumGrid({ albums, onOpen, onArtist, onEdit, onDelete, selectedKeys, o
                         <ContextMenuItem onSelect={() => onOpen(a)}><Disc3 className="h-4 w-4 mr-2" /> Go to album</ContextMenuItem>
                         {onArtist && a.albumArtist && <ContextMenuItem onSelect={() => onArtist(a.albumArtist)}><User className="h-4 w-4 mr-2" /> Go to artist</ContextMenuItem>}
                         {onEdit && <><ContextMenuSeparator /><ContextMenuItem onSelect={() => onEdit(a)}><Pencil className="h-4 w-4 mr-2" /> Edit album metadata</ContextMenuItem></>}
+                        {onRefresh && <ContextMenuItem onSelect={() => onRefresh(a)}><RefreshCw className="h-4 w-4 mr-2" /> Refresh metadata</ContextMenuItem>}
                         {onDelete && <><ContextMenuSeparator /><ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => onDelete(a)}><Trash2 className="h-4 w-4 mr-2" /> Delete from library</ContextMenuItem></>}
                     </ContextMenuContent>
                 </ContextMenu>
@@ -1177,6 +1271,13 @@ function ArtistView({ releases, name, bust, onOpenAlbum, onAllSongs, onArtist, o
             if (tracks.length === 0) return;
             const idx = inLib.findIndex((t) => t.rank === rank);
             playQueue(tracks.map(toPlayerTrack), Math.max(0, idx));
+        } catch (e) { toast.error(`${e}`); }
+    };
+    const queuePopular = async (t: backend.ArtistTopTrack) => {
+        if (!t.libraryTrackId) return;
+        try {
+            const tracks = await GetLibraryTracksByIDs([t.libraryTrackId]);
+            if (tracks.length) { addToQueue(tracks.map(toPlayerTrack)); toast.success("Added to queue"); }
         } catch (e) { toast.error(`${e}`); }
     };
     // Plex-style on-demand enrichment: first time an artist page opens with no
@@ -1387,6 +1488,11 @@ function ArtistView({ releases, name, bust, onOpenAlbum, onAllSongs, onArtist, o
                                         <Play className="h-4 w-4 mr-2" /> Play
                                     </ContextMenuItem>
                                 )}
+                                {t.inLibrary && t.libraryTrackId && (
+                                    <ContextMenuItem onClick={() => void queuePopular(t)}>
+                                        <ListEnd className="h-4 w-4 mr-2" /> Add to queue
+                                    </ContextMenuItem>
+                                )}
                                 {!t.inLibrary && t.spotifyId && (
                                     <ContextMenuItem onClick={() => downloadPopular(t)}>
                                         <Download className="h-4 w-4 mr-2" /> Download
@@ -1530,7 +1636,9 @@ function SongList({ tracks, numbered, onAction, onPlay, playlists, playlistId, s
                 <ContextMenuItem onSelect={() => onAction("artist", t)}><User className="h-4 w-4 mr-2" /> Go to artist</ContextMenuItem>
                 <ContextMenuItem onSelect={() => onAction("album", t)}><Disc3 className="h-4 w-4 mr-2" /> Go to album</ContextMenuItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem onSelect={() => onAction("credits", t)}><Info className="h-4 w-4 mr-2" /> View credits</ContextMenuItem>
+                <ContextMenuItem onSelect={() => onAction("info", t)}><Info className="h-4 w-4 mr-2" /> Get info</ContextMenuItem>
+                <ContextMenuItem onSelect={() => onAction("credits", t)}><User className="h-4 w-4 mr-2" /> View credits</ContextMenuItem>
+                <ContextMenuItem onSelect={() => onAction("refresh", t)}><RefreshCw className="h-4 w-4 mr-2" /> Refresh metadata</ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => onAction("delete", t)}><Trash2 className="h-4 w-4 mr-2" /> Delete from library</ContextMenuItem>
             </ContextMenuContent>

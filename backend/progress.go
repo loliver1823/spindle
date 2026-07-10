@@ -396,12 +396,6 @@ func (pw *ProgressWriter) SetTotalBytes(n int64) {
 	}
 }
 
-func NewProgressWriterWithID(writer io.Writer, itemID string) *ProgressWriter {
-	pw := NewProgressWriter(writer)
-	pw.itemID = itemID
-	return pw
-}
-
 func getCurrentTimeMillis() int64 {
 	return time.Now().UnixMilli()
 }
@@ -569,10 +563,6 @@ func StartDownloadItem(id string) {
 	currentItemLock.Unlock()
 
 	go persistQueue()
-}
-
-func UpdateItemProgress(id string, progress, speed float64) {
-	UpdateItemProgressEx(id, progress, speed, 0)
 }
 
 func UpdateItemProgressEx(id string, progress, speed, totalMB float64) {

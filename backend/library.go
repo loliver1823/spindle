@@ -1196,7 +1196,6 @@ type LibraryFolder struct {
 	TrackCount int    `json:"trackCount"`
 }
 
-// RescanAllFolders re-reads tags for every scanned folder, ignoring mtime — use
 // RescanAllFolders walks every library folder incrementally (Plex-style):
 // unchanged files are skipped by modification time, so only new files and
 // files whose tags were edited get re-read.
@@ -1367,6 +1366,64 @@ func FindLibraryAlbum(album, artist string) (*LibraryAlbum, error) {
 		}
 	}
 	return &candidates[0], nil
+}
+
+// RefreshTracks force re-reads tags and audio properties from disk for the
+// given track ids — the targeted "Refresh metadata" action, vs a full rescan.
+func RefreshTracks(ids []int64) (int, error) {
+	if libDB == nil {
+		return 0, fmt.Errorf("library not initialized")
+	}
+	stmt, err := libDB.Prepare(trackUpsertSQL)
+	if err != nil {
+		return 0, err
+	}
+	defer stmt.Close()
+	now := time.Now().Unix()
+	refreshed := 0
+	for _, id := range ids {
+		var path string
+		if err := libDB.QueryRow("SELECT path FROM tracks WHERE id = ?", id).Scan(&path); err != nil {
+			continue
+		}
+		switch upsertTrackFile(stmt, path, now, true) {
+		case fileAdded, fileUpdated:
+			refreshed++
+		}
+	}
+	return refreshed, nil
+}
+
+// TrackDetails is the Plex-style "Get Info" payload: the library row plus
+// everything the file itself says.
+type TrackDetails struct {
+	Track    LibraryTrack        `json:"track"`
+	FileSize int64               `json:"fileSize"`
+	Modified int64               `json:"modified"` // unix seconds
+	Tags     map[string][]string `json:"tags"`     // raw tag dump from the file
+}
+
+func GetTrackDetails(id int64) (TrackDetails, error) {
+	var out TrackDetails
+	tracks, err := GetTracksByIDs([]int64{id})
+	if err != nil {
+		return out, err
+	}
+	if len(tracks) == 0 {
+		return out, fmt.Errorf("track not found")
+	}
+	out.Track = tracks[0]
+	np := norm.NFC.String(out.Track.Path)
+	if st, err := os.Stat(np); err == nil {
+		out.FileSize = st.Size()
+		out.Modified = st.ModTime().Unix()
+	}
+	if tags, err := taglib.ReadTags(np); err == nil {
+		out.Tags = tags
+	} else {
+		out.Tags = map[string][]string{}
+	}
+	return out, nil
 }
 
 // DeleteLibraryTracks removes tracks from the library AND deletes their files

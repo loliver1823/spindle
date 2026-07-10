@@ -256,19 +256,6 @@ func (a *App) GetCurrentIPInfo() (string, error) {
 	return string(payload), nil
 }
 
-func (a *App) getFirstArtist(artistString string) string {
-	if artistString == "" {
-		return ""
-	}
-	delimiters := []string{", ", " & ", " feat. ", " ft. ", " featuring "}
-	for _, d := range delimiters {
-		if idx := strings.Index(strings.ToLower(artistString), d); idx != -1 {
-			return strings.TrimSpace(artistString[:idx])
-		}
-	}
-	return artistString
-}
-
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
@@ -772,6 +759,21 @@ func (a *App) SetTrackMatch(spotifyID string, trackID int64) error {
 // DeleteLibraryTracks deletes tracks from the library and their files from disk.
 func (a *App) DeleteLibraryTracks(ids []int64) (int, error) {
 	return backend.DeleteLibraryTracks(ids)
+}
+
+// RefreshTrackMetadata force re-reads tags from disk for the given tracks.
+func (a *App) RefreshTrackMetadata(ids []int64) (int, error) {
+	n, err := backend.RefreshTracks(ids)
+	if err == nil && n > 0 {
+		a.emit("library:changed", map[string]any{"kind": "refresh"})
+	}
+	return n, err
+}
+
+// GetTrackDetails returns the "Get Info" payload: library row, file stats and
+// the raw tag dump.
+func (a *App) GetTrackDetails(id int64) (backend.TrackDetails, error) {
+	return backend.GetTrackDetails(id)
 }
 
 // FindLibraryArtistName returns the library's spelling of an artist ("" if absent).

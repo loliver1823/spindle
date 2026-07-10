@@ -353,14 +353,6 @@ func qobuzShouldRefreshCredentials(statusCode int) bool {
 	return statusCode == http.StatusBadRequest || statusCode == http.StatusUnauthorized
 }
 
-func newQobuzSignedRequest(method string, path string, params url.Values) (*http.Request, error) {
-	creds, err := getQobuzAPICredentials(false)
-	if err != nil {
-		return nil, err
-	}
-	return newQobuzSignedRequestWithCredentials(method, path, params, creds)
-}
-
 func doQobuzSignedRequest(method string, path string, params url.Values, client *http.Client) (*http.Response, error) {
 	if client == nil {
 		client = &http.Client{Timeout: 20 * time.Second}

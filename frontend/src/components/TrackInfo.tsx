@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger, } from "@/components/ui/toolti
 import type { TrackMetadata, TrackAvailability } from "@/types/api";
 import { usePreview } from "@/hooks/usePreview";
 import { AvailabilityLinks, hasAvailabilityLinks } from "./AvailabilityLinks";
+import { SourceSelect } from "./SourceSelect";
 import { buildClickableArtists, getClickableArtistKey } from "@/lib/artist-links";
 interface TrackInfoProps {
     track: TrackMetadata & {
@@ -132,6 +133,7 @@ export function TrackInfo({ track, downloadingTrack, isDownloaded, isFailed, isS
                 Download
               </>)}
             </Button>
+            <SourceSelect />
             {track.spotify_id && (<Tooltip>
               <TooltipTrigger asChild>
                 <Button onClick={() => playPreview(track.spotify_id!, track.name)} variant="outline" size="icon" disabled={loadingPreview === track.spotify_id}>

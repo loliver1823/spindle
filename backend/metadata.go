@@ -384,54 +384,6 @@ func extractLyricsFromFlac(filePath string) (string, error) {
 	return "", nil
 }
 
-func EmbedCoverArtOnly(filePath string, coverPath string) error {
-	if coverPath == "" || !fileExists(coverPath) {
-		return nil
-	}
-
-	ext := strings.ToLower(pathfilepath.Ext(filePath))
-
-	switch ext {
-	case ".mp3":
-		return embedCoverToMp3(filePath, coverPath)
-	case ".m4a":
-
-		return nil
-	default:
-		return fmt.Errorf("unsupported file format: %s", ext)
-	}
-}
-
-func embedCoverToMp3(filePath string, coverPath string) error {
-	tag, err := id3v2.Open(filePath, id3v2.Options{Parse: true})
-	if err != nil {
-		return fmt.Errorf("failed to open MP3 file: %w", err)
-	}
-	defer tag.Close()
-
-	tag.DeleteFrames(tag.CommonID("Attached picture"))
-
-	artwork, err := os.ReadFile(coverPath)
-	if err != nil {
-		return fmt.Errorf("failed to read cover art: %w", err)
-	}
-
-	pic := id3v2.PictureFrame{
-		Encoding:    id3v2.EncodingUTF8,
-		MimeType:    "image/jpeg",
-		PictureType: id3v2.PTFrontCover,
-		Description: "Front cover",
-		Picture:     artwork,
-	}
-	tag.AddAttachedPicture(pic)
-
-	if err := tag.Save(); err != nil {
-		return fmt.Errorf("failed to save MP3 tags: %w", err)
-	}
-
-	return nil
-}
-
 func EmbedLyricsOnlyMP3(filepath string, lyrics string) error {
 	if lyrics == "" {
 		return nil

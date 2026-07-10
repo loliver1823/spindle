@@ -454,18 +454,6 @@ func extractSpotifyTrackIdentifiers(client *http.Client, payload []byte) (Spotif
 	return identifiers, nil
 }
 
-func extractSpotifyTrackISRC(payload []byte) (string, error) {
-	identifiers, err := extractSpotifyTrackIdentifiers(nil, payload)
-	if err != nil {
-		return "", err
-	}
-	if identifiers.ISRC != "" {
-		return identifiers.ISRC, nil
-	}
-
-	return "", fmt.Errorf("ISRC not found in Spotify track metadata")
-}
-
 func extractSpotifyAlbumUPC(payload []byte) (string, error) {
 	var album spotifyAlbumRawData
 	if err := json.Unmarshal(payload, &album); err != nil {

@@ -478,36 +478,6 @@ func (q *QobuzDownloader) DownloadFile(url, filepath string) error {
 	return nil
 }
 
-func (q *QobuzDownloader) DownloadCoverArt(coverURL, filepath string) error {
-	if coverURL == "" {
-		return fmt.Errorf("no cover URL provided")
-	}
-
-	req, err := NewRequestWithDefaultHeaders(http.MethodGet, coverURL, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create cover request: %w", err)
-	}
-
-	resp, err := q.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to download cover: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("cover download failed with status %d", resp.StatusCode)
-	}
-
-	out, err := os.Create(filepath)
-	if err != nil {
-		return fmt.Errorf("failed to create cover file: %w", err)
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, resp.Body)
-	return err
-}
-
 func buildQobuzFilename(title, artist, album, albumArtist, releaseDate string, trackNumber, discNumber int, format string, includeTrackNumber bool, position int, useAlbumTrackNumber bool, extra ...string) string {
 	var filename string
 	isrc := ""
@@ -566,22 +536,6 @@ func buildQobuzFilename(title, artist, album, albumArtist, releaseDate string, t
 	}
 
 	return filename + ".flac"
-}
-
-func (q *QobuzDownloader) DownloadTrack(spotifyID, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate string, useAlbumTrackNumber bool, spotifyCoverURL string, embedMaxQualityCover bool, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks int, spotifyTotalDiscs int, spotifyCopyright, spotifyPublisher, spotifyComposer, metadataSeparator, spotifyURL string, allowFallback bool, useFirstArtistOnly bool, useSingleGenre bool, embedGenre bool) (string, error) {
-	var isrc string
-	if spotifyID != "" {
-		linkClient := NewSongLinkClient()
-		resolvedISRC, err := linkClient.GetISRCDirect(spotifyID)
-		if err != nil {
-			return "", fmt.Errorf("failed to get ISRC: %v", err)
-		}
-		isrc = resolvedISRC
-	} else {
-		return "", fmt.Errorf("spotify ID is required for Qobuz download")
-	}
-
-	return q.DownloadTrackWithISRC(isrc, outputDir, quality, filenameFormat, includeTrackNumber, position, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate, useAlbumTrackNumber, spotifyCoverURL, embedMaxQualityCover, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks, spotifyTotalDiscs, spotifyCopyright, spotifyPublisher, spotifyComposer, metadataSeparator, spotifyURL, allowFallback, useFirstArtistOnly, useSingleGenre, embedGenre)
 }
 
 func (q *QobuzDownloader) DownloadTrackWithISRC(isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate string, useAlbumTrackNumber bool, spotifyCoverURL string, embedMaxQualityCover bool, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks int, spotifyTotalDiscs int, spotifyCopyright, spotifyPublisher, spotifyComposer, metadataSeparator, spotifyURL string, allowFallback bool, useFirstArtistOnly bool, useSingleGenre bool, embedGenre bool) (string, error) {
