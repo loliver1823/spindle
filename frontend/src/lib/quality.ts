@@ -48,6 +48,15 @@ async function flush(): Promise<void> {
     if (pending.size > 0 && !timer) timer = setTimeout(flush, 50);
 }
 
+// Synchronous reads for non-React callers (enqueue stamps the badge source).
+export function getCachedQuality(spotifyId?: string): backend.TrackQuality | undefined {
+    return spotifyId ? cache.get(spotifyId) : undefined;
+}
+
+export function getCachedAlbumQuality(albumId?: string): backend.TrackQuality | undefined {
+    return albumId ? albumCache.get(albumId) : undefined;
+}
+
 export function useTrackQuality(spotifyId?: string): backend.TrackQuality | undefined {
     return useSyncExternalStore(
         (cb) => { listeners.add(cb); return () => { listeners.delete(cb); }; },

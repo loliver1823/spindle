@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { getSettings, getAlbumCategoryLabel } from "@/lib/settings";
+import { getCachedQuality, getCachedAlbumQuality } from "@/lib/quality";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { getFirstArtist } from "@/lib/utils";
 import { logger } from "@/lib/logger";
@@ -33,11 +34,23 @@ interface EnqueueMeta {
     publisher?: string;
     albumType?: string;
     upc?: string;
+    isrc?: string;
+    albumId?: string;
     applyFolder: boolean;
 }
 
 async function enqueue(meta: EnqueueMeta): Promise<string> {
     const qobuzDirect = meta.id.startsWith("qobuz_");
+    // The badge the user saw IS the source contract: when the Source dropdown
+    // is Auto and this track's quality badge is cached, pin its source on the
+    // item so the queue skips the backend re-probe ("Preparing...") entirely.
+    let badgeService = "";
+    if (!qobuzDirect && (getSettings().downloader || "auto") === "auto") {
+        // Album pages show one album-level badge instead of per-track ones,
+        // so fall back to the album's cached quality.
+        const q = getCachedQuality(meta.spotifyId || meta.id) ?? getCachedAlbumQuality(meta.albumId);
+        if (q?.found && q.source) badgeService = q.source.toLowerCase();
+    }
     const item: Record<string, unknown> = {
         track_name: meta.trackName || "",
         artist_name: meta.artistName || "",
@@ -54,11 +67,11 @@ async function enqueue(meta: EnqueueMeta): Promise<string> {
         total_discs: meta.totalDiscs || 0,
         copyright: meta.copyright || "",
         publisher: meta.publisher || "",
-        isrc: qobuzDirect ? meta.id : "",
+        isrc: qobuzDirect ? meta.id : (meta.isrc || ""),
         category: meta.albumType ? getAlbumCategoryLabel(meta.albumType) : "",
         upc: meta.upc || "",
         position: meta.position || 0,
-        service: qobuzDirect ? "qobuz" : "",
+        service: qobuzDirect ? "qobuz" : badgeService,
         apply_folder: meta.applyFolder,
     };
     return App()["EnqueueDownload"](item);
@@ -200,10 +213,12 @@ export function useDownload() {
         publisher: track.publisher,
         albumType: track.album_type,
         upc: track.upc,
+        isrc: track.isrc,
+        albumId: track.album_id,
         applyFolder,
     });
 
-    const handleDownloadTrack = async (id: string, trackName?: string, artistName?: string, albumName?: string, spotifyId?: string, _playlistName?: string, durationMs?: number, position?: number, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number, spotifyTotalDiscs?: number, copyright?: string, publisher?: string, albumTypeHint?: string, upcHint?: string) => {
+    const handleDownloadTrack = async (id: string, trackName?: string, artistName?: string, albumName?: string, spotifyId?: string, _playlistName?: string, durationMs?: number, position?: number, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number, spotifyTotalDiscs?: number, copyright?: string, publisher?: string, albumTypeHint?: string, upcHint?: string, albumIdHint?: string, isrcHint?: string) => {
         if (!id) {
             toast.error("No ID found for this track");
             return;
@@ -218,6 +233,7 @@ export function useDownload() {
                 trackNumber: spotifyTrackNumber, discNumber: spotifyDiscNumber,
                 totalTracks: spotifyTotalTracks, totalDiscs: spotifyTotalDiscs,
                 copyright, publisher, albumType: albumTypeHint, upc: upcHint,
+                albumId: albumIdHint, isrc: isrcHint,
                 applyFolder: false,
             });
             trackedRef.current.set(itemID, id);
