@@ -194,7 +194,7 @@ func newCommunityCooldownError(service string, resp *http.Response) *communityCo
 		message = fmt.Sprintf(communityCooldownFallbackMessage, max(1, (seconds+59)/60))
 	}
 
-	SetCommunityCooldown(float64(seconds), message)
+	SetServiceCooldown(service, float64(seconds), message)
 	Dbgf("%s community API on scheduled cooldown (503), back in ~%ds\n", service, seconds)
 
 	return &communityCooldownError{service: service, seconds: seconds, message: message}

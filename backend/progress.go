@@ -70,10 +70,14 @@ var (
 	rateLimitUntilMs int64
 	rateLimitLock    sync.RWMutex
 
-	cooldownUntilMs int64
-	cooldownMessage string
-	cooldownEventID int64
-	cooldownLock    sync.RWMutex
+	// Cooldowns are tracked per source service — community endpoints take
+	// their breaks on independent schedules, and a single shared clock made
+	// the countdown bounce whenever a different service's 503 overwrote it.
+	// Readers report the soonest-ending active entry: when the next source
+	// comes back.
+	cooldownByService = map[string]serviceCooldown{}
+	cooldownEventID   int64
+	cooldownLock      sync.RWMutex
 
 	downloadQueue       []DownloadItem
 	downloadQueueLock   sync.RWMutex
@@ -270,22 +274,17 @@ func GetDownloadProgress() ProgressInfo {
 		}
 	}
 
+	now := getCurrentTimeMillis()
 	cooldownLock.RLock()
-	cdUntilMs := cooldownUntilMs
-	cdMessage := cooldownMessage
+	cdUntilMs, cdMessage := soonestCooldownLocked(now)
 	cdEventID := cooldownEventID
 	cooldownLock.RUnlock()
 
 	cooldown := false
 	cooldownSecs := 0
 	if cdUntilMs > 0 {
-		remainingMs := cdUntilMs - getCurrentTimeMillis()
-		if remainingMs > 0 {
-			cooldown = true
-			cooldownSecs = int((remainingMs + 999) / 1000)
-		} else {
-			cdMessage = ""
-		}
+		cooldown = true
+		cooldownSecs = int((cdUntilMs - now + 999) / 1000)
 	}
 
 	return ProgressInfo{
@@ -317,23 +316,53 @@ func ClearRateLimitCooldown() {
 	rateLimitLock.Unlock()
 }
 
-func SetCommunityCooldown(seconds float64, message string) {
+type serviceCooldown struct {
+	untilMs int64
+	message string
+}
+
+// soonestCooldownLocked returns the active entry that ends first (0 if none).
+// Expired entries are skipped, not deleted — callers may hold only RLock and
+// the map never outgrows the handful of sources.
+func soonestCooldownLocked(nowMs int64) (int64, string) {
+	var bestUntil int64
+	var bestMsg string
+	for _, c := range cooldownByService {
+		if c.untilMs <= nowMs {
+			continue
+		}
+		if bestUntil == 0 || c.untilMs < bestUntil {
+			bestUntil, bestMsg = c.untilMs, c.message
+		}
+	}
+	return bestUntil, bestMsg
+}
+
+// SetServiceCooldown records a scheduled break for one source service.
+// seconds <= 0 clears that service's entry.
+func SetServiceCooldown(service string, seconds float64, message string) {
 	cooldownLock.Lock()
 	if seconds <= 0 {
-		cooldownUntilMs = 0
-		cooldownMessage = ""
+		delete(cooldownByService, service)
 	} else {
-		cooldownUntilMs = getCurrentTimeMillis() + int64(seconds*1000)
-		cooldownMessage = message
+		cooldownByService[service] = serviceCooldown{
+			untilMs: getCurrentTimeMillis() + int64(seconds*1000),
+			message: message,
+		}
 		cooldownEventID++
 	}
 	cooldownLock.Unlock()
 }
 
+// SetCommunityCooldown keeps the old service-less entry point (parsed error
+// text with no service attribution).
+func SetCommunityCooldown(seconds float64, message string) {
+	SetServiceCooldown("", seconds, message)
+}
+
 func ClearCommunityCooldown() {
 	cooldownLock.Lock()
-	cooldownUntilMs = 0
-	cooldownMessage = ""
+	cooldownByService = map[string]serviceCooldown{}
 	cooldownLock.Unlock()
 }
 
@@ -533,16 +562,14 @@ func ClaimNextQueued() (DownloadItem, bool) {
 
 // CooldownRemainingSecs reports how long the community cooldown has left.
 func CooldownRemainingSecs() int {
+	now := time.Now().UnixMilli()
 	cooldownLock.RLock()
 	defer cooldownLock.RUnlock()
-	if cooldownUntilMs == 0 {
+	until, _ := soonestCooldownLocked(now)
+	if until == 0 {
 		return 0
 	}
-	remain := cooldownUntilMs - time.Now().UnixMilli()
-	if remain <= 0 {
-		return 0
-	}
-	return int(remain / 1000)
+	return int((until - now) / 1000)
 }
 
 func StartDownloadItem(id string) {
@@ -709,19 +736,15 @@ func GetDownloadQueue() DownloadQueueInfo {
 	queueCopy := make([]DownloadItem, len(downloadQueue))
 	copy(queueCopy, downloadQueue)
 
+	nowMs := getCurrentTimeMillis()
 	cooldownLock.RLock()
-	cdUntilMs := cooldownUntilMs
-	cdMessage := cooldownMessage
+	cdUntilMs, cdMessage := soonestCooldownLocked(nowMs)
 	cooldownLock.RUnlock()
 	cd := false
 	cdSecs := 0
 	if cdUntilMs > 0 {
-		if remainingMs := cdUntilMs - getCurrentTimeMillis(); remainingMs > 0 {
-			cd = true
-			cdSecs = int((remainingMs + 999) / 1000)
-		} else {
-			cdMessage = ""
-		}
+		cd = true
+		cdSecs = int((cdUntilMs - nowMs + 999) / 1000)
 	}
 
 	return DownloadQueueInfo{
