@@ -1,58 +1,61 @@
-<div align="center">
+# Kazoo Music Manager
 
-# 🌀 Kazoo Music Manager
+Kazoo is a desktop app for managing a lossless music library. It indexes your
+local files into a browsable library (artists, albums, playlists, the usual),
+plays them, and can download whatever you're missing in FLAC from Tidal, Qobuz
+or Amazon Music, tagged and filed to match the rest of your collection.
 
-**A lossless music library manager and downloader for the desktop.**
+Built with Go, [Wails](https://wails.io) and React. Runs on Windows, macOS and
+Linux, with a beta Android build.
 
-Organize a pristine FLAC library, browse it like a streaming app, and fill in the gaps —
-Kazoo finds what's missing and downloads it in true lossless quality, tagged and filed
-exactly where it belongs.
+## Features
 
-Built with Go + [Wails](https://wails.io) and React. Windows · macOS · Linux · Android (beta).
+**Library**
 
-</div>
+- SQLite-backed index over your folders, with realtime file watching. Files
+  moved or retagged outside the app get picked up automatically.
+- Player with queue, shuffle and repeat. The next track is preloaded so
+  transitions don't stutter, and playback starts immediately.
+- Codec, sample rate and bitrate shown on album cards and track rows.
+- Artist pages with bio, photo, popular tracks and full discography, plus a
+  "New releases" check that compares an artist's discography against what you
+  have.
+- Get Info on any track: file location, size, codec details, dates, play count
+  and a dump of every tag in the file. Refresh Metadata re-reads tags from disk.
+- Metadata editing for tracks, albums and artists.
+- Deleting from the library also deletes the files, and cleans up album/artist
+  folders that end up empty.
 
----
+**Downloading**
 
-## ✨ Features
+- Search artists, albums, tracks and playlists, or paste a Spotify URL.
+- Downloads come from the source shown on the quality badge. If you want a
+  specific source, pin it with the dropdown.
+- Artists whose music isn't on Spotify (or is only partially there) can be
+  browsed and downloaded through the Qobuz catalog view.
+- The queue survives restarts, skips files you already have, and when a source
+  takes a scheduled break it waits and resumes on its own. Break clocks are
+  tracked per source, so one slow source doesn't hold up the rest.
+- Synced lyrics (`.lrc`) can be saved next to each download. Cover art, M3U8
+  export and failure reports are there too.
 
-### 🗂️ Library
-- **Plex-style library** over your local files — artists, albums, songs, years, genres, all backed by a fast SQLite index with realtime folder watching
-- **Built-in player** with instant starts and seamless track transitions — the next song is preloaded before the current one ends
-- **Get Info on any track** — file location, size, codec/sample rate/bitrate, dates, play count, and the full raw tag dump; **Refresh metadata** re-reads tags from disk on demand
-- **Quality stamps everywhere** — codec, sample rate, and bitrate shown on album cards and track rows straight from the files
-- **Artist pages** with bio, popular tracks, discography, public playlists, and a **New releases** check that diffs an artist's full discography against your library
-- **Metadata editing** for tracks, albums, and artists, with automatic artist enrichment (art, bios, top tracks)
-- **Safe deletes** — remove albums or selections from the library and disk in one step; sidecar junk (covers, logs, cue sheets, lyrics) is cleaned up with them
-- **Self-healing index** — files moved or renamed outside the app are re-scanned and stale entries pruned automatically
+**Playlist sync**
 
-### ⬇️ Downloading
-- **Search anything** — artists, albums, tracks, playlists, even public profiles — and download it in FLAC (up to 24-bit hi-res where available)
-- **What you see is what you get** — downloads come from the exact source shown on the quality badge, or pin a source with the inline dropdown; a direct Qobuz catalog browse covers music that's no longer on streaming
-- **Artists who left Spotify still work** — when Spotify's listing is sparse (or missing entirely), browse the artist's complete discography from Qobuz's catalog and download all of it
-- **Library-aware** — existing files are detected and skipped; everything lands in your `Artist/[Year] Album/NN - Title` structure no matter where the download started
-- **Real queue** — persistent across restarts, pause/resume, retry failed, multi-select removal, animated per-track progress, and add-while-downloading
-- **Server-break aware** — per-source break clocks; the queue resumes the moment the first source comes back instead of waiting out the longest break
-- **Lyrics on autopilot** — synced `.lrc` files saved next to every download (toggleable)
-- **Cover art, M3U8 export, and download reports** included
+- Sync a Spotify playlist and see which of its tracks you already have.
+- Download just the missing ones; they file into your normal folder structure.
+- Fix match lets you pin a playlist entry to the exact local file it should
+  count as, when the automatic matching gets it wrong.
 
-### 🎯 Playlist Sync
-- Track any Spotify playlist against your library — owned tracks light up, missing ones are dulled out
-- Synced playlists live in **Library → Playlists**, right next to your own
-- Download just the missing songs with one click; they file into your normal artist/album structure
-- **Fix match** lets you pin a playlist or popular track to the exact local file it should count as
+**Tools**
 
-### 🛠️ Toolbox
-- Audio quality analyzer (spectrum + codec inspection), converter, resampler, file manager, and lyrics manager
-- FFmpeg auto-installed on first run
+Audio quality analyzer, converter, resampler, file organizer and lyrics
+manager. FFmpeg is downloaded automatically the first time something needs it.
 
-## 📸 Screenshots
+## Screenshots
 
 | Library | Artist page |
 |---|---|
 | ![Library](docs/screenshots/library.png) | ![Artist](docs/screenshots/artist.png) |
-
-**Artist releases, grouped by type — Albums, EPs, Compilations, Live:**
 
 ![Artist releases](docs/screenshots/artist-releases.png)
 
@@ -64,7 +67,7 @@ Built with Go + [Wails](https://wails.io) and React. Windows · macOS · Linux �
 |---|---|
 | ![Queue](docs/screenshots/queue.png) | ![Settings](docs/screenshots/settings.png) |
 
-## 🚀 Getting Started
+## Installation
 
 Grab the latest build from [Releases](../../releases):
 
@@ -76,20 +79,24 @@ Grab the latest build from [Releases](../../releases):
 | Linux ARM64 | `Kazoo-ARM.AppImage` |
 | Android (beta) | `Kazoo.apk` (arm64, sideload) |
 
-Desktop builds check for updates on launch and can update themselves in place.
+Desktop builds check for updates at launch and can update themselves in place.
+There's also a "Check now" button in Settings.
 
-First launch: add your music folder under **Library → Manage folders**. Kazoo scans it,
-builds the index, and keeps watching for changes. Your first library folder doubles as the
-download destination, so downloads become part of the library the moment they finish.
+On first launch, add your music folder under Library. Kazoo scans it and keeps
+watching for changes. Your first library folder is also where downloads go, so
+new music becomes part of the library as soon as it finishes.
 
-App data (library DB, playlists, artist art, config) lives in `~/.spindle` — a holdover
-from Kazoo's previous name, kept so upgrades never orphan your library.
+App data (library DB, playlists, artist art, config) lives in `~/.spindle`.
+That's a holdover from the app's previous name, kept so updating never orphans
+an existing library.
 
-> **Linux** needs `webkit2gtk-4.1` (`sudo apt install libwebkit2gtk-4.1-0` on Ubuntu/Debian).
+Linux needs `webkit2gtk-4.1` (`sudo apt install libwebkit2gtk-4.1-0` on
+Ubuntu/Debian).
 
-## 🔧 Building from Source
+## Building from source
 
-Requirements: Go 1.26+, Node 24+, pnpm, and the [Wails CLI](https://wails.io/docs/gettingstarted/installation).
+You'll need Go 1.26+, Node 24+, pnpm and the
+[Wails CLI](https://wails.io/docs/gettingstarted/installation).
 
 ```bash
 git clone https://github.com/loliver1823/kazoo.git
@@ -99,9 +106,10 @@ wails dev      # live-reload development build
 wails build    # production binary in build/bin
 ```
 
-### Headless / server mode
+### Server mode
 
-The same binary can run without a window — the full app served over HTTP for any browser on the machine:
+The same binary can run headless, serving the full app over HTTP to any
+browser on the machine:
 
 ```bash
 kazoo serve 127.0.0.1:8899
@@ -109,19 +117,21 @@ kazoo serve 127.0.0.1:8899
 
 ### Android
 
-The backend is pure Go, so it cross-compiles to a native Android binary that a thin WebView shell embeds — same app, same UI, running on-device:
+The backend is pure Go, so it cross-compiles to a native Android binary that a
+small WebView shell runs on-device:
 
 ```powershell
 wails build                       # produces frontend/dist
 .\scripts\build-android.ps1       # cross-compiles the server + assembles the APK
-# → android-app/app/build/outputs/apk/debug/app-debug.apk (arm64)
+# -> android-app/app/build/outputs/apk/debug/app-debug.apk (arm64)
 ```
 
-Requires a JDK 17+, the Android SDK, and Gradle 8.5+. Downloads land in the app's scoped storage (`Android/data/wtf.kazoo/files/Music`) by default.
+Requires JDK 17+, the Android SDK and Gradle 8.5+. Downloads go to the app's
+scoped storage (`Android/data/wtf.kazoo/files/Music`).
 
-## ⚙️ How files are organized
+## File layout
 
-Kazoo names files with configurable templates. The default layout:
+File and folder names come from configurable templates. The default:
 
 ```
 Library/
@@ -132,16 +142,16 @@ Library/
         └── ...
 ```
 
-Templates, existing-file detection, source order, embedded art quality, and lyric
-behaviour are all configurable in **Settings**.
+Templates, existing-file detection, source order, cover art quality and lyric
+behaviour are all in Settings.
 
-## ⚠️ Disclaimer
+## Disclaimer
 
-Kazoo is a library management tool, not affiliated with or endorsed by Spotify, Tidal,
-Qobuz, Amazon Music, or any other service. Downloading copyrighted material may be illegal
-in your country — use it only for content you have the right to access, and support the
-artists you love.
+Kazoo is a library management tool. It isn't affiliated with or endorsed by
+Spotify, Tidal, Qobuz, Amazon Music or any other service. Downloading
+copyrighted material may be illegal where you live. Use it for content you
+have the right to access, and support the artists you love.
 
-## 📄 License
+## License
 
 [MIT](LICENSE)

@@ -846,11 +846,11 @@ func QueryLibrary(q LibraryQuery) ([]LibraryTrack, error) {
 		dir = "DESC"
 	}
 	textSort := map[string]bool{"title": true, "artist": true, "album_artist": true, "album": true, "genre": true, "codec": true}
-	collate := ""
+	orderCol := sortCol
 	if textSort[sortCol] {
-		collate = " COLLATE NOCASE"
+		orderCol = noArticle(sortCol)
 	}
-	sqlStr += fmt.Sprintf(" ORDER BY %s%s %s, album COLLATE NOCASE ASC, disc_no ASC, track_no ASC", sortCol, collate, dir)
+	sqlStr += fmt.Sprintf(" ORDER BY %s %s, %s ASC, disc_no ASC, track_no ASC", orderCol, dir, noArticle("album"))
 	limit := q.Limit
 	if limit <= 0 || limit > 2000 {
 		limit = 500
@@ -984,6 +984,13 @@ type ArtistReleases struct {
 
 // albumSort maps a UI sort key to an ORDER BY clause over the grouped album
 // query. Text columns use COLLATE NOCASE so "blink-182" sorts with the B's.
+// noArticle wraps a text column so ORDER BY ignores a leading "The " —
+// "The Car" files under C, matching the artist grids and every library
+// manager users come from. LIKE is case-insensitive for ASCII in SQLite.
+func noArticle(col string) string {
+	return "(CASE WHEN " + col + " LIKE 'the %' THEN SUBSTR(" + col + ", 5) ELSE " + col + " END) COLLATE NOCASE"
+}
+
 func albumSort(sort string, desc bool) string {
 	dir := "ASC"
 	if desc {
@@ -991,13 +998,13 @@ func albumSort(sort string, desc bool) string {
 	}
 	switch sort {
 	case "name":
-		return "album COLLATE NOCASE " + dir + ", album_artist COLLATE NOCASE ASC"
+		return noArticle("album") + " " + dir + ", " + noArticle("album_artist") + " ASC"
 	case "year":
-		return "MAX(year) " + dir + ", album_artist COLLATE NOCASE ASC, album COLLATE NOCASE ASC"
+		return "MAX(year) " + dir + ", " + noArticle("album_artist") + " ASC, " + noArticle("album") + " ASC"
 	case "added":
-		return "MAX(date_added) " + dir + ", album_artist COLLATE NOCASE ASC, album COLLATE NOCASE ASC"
+		return "MAX(date_added) " + dir + ", " + noArticle("album_artist") + " ASC, " + noArticle("album") + " ASC"
 	default: // artist / album_artist
-		return "album_artist COLLATE NOCASE " + dir + ", year ASC, album COLLATE NOCASE ASC"
+		return noArticle("album_artist") + " " + dir + ", year ASC, " + noArticle("album") + " ASC"
 	}
 }
 
