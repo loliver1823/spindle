@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { AlbumQualityBadge } from "./QualityBadge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Download, FolderOpen, ImageDown, FileText, XCircle } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
@@ -229,6 +230,7 @@ export function AlbumInfo({ albumInfo, trackList, searchQuery, sortBy, selectedT
                   </span>
                   <span>•</span>
                   <span>{albumInfo.release_date}</span>
+                  {trackList[0]?.album_id && <AlbumQualityBadge albumId={trackList[0].album_id} />}
                   <span>•</span>
                   <span>
                     {showStreamingProgress

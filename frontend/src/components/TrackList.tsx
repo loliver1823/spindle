@@ -9,7 +9,7 @@ import { usePreview } from "@/hooks/usePreview";
 import { AvailabilityLinks, hasAvailabilityLinks } from "./AvailabilityLinks";
 import { buildClickableArtists, getClickableArtistKey } from "@/lib/artist-links";
 import { useHideClean, excludeCleanVariants } from "@/lib/clean";
-import { QualityBadge, AlbumQualityBadge } from "./QualityBadge";
+import { QualityBadge } from "./QualityBadge";
 import { useState } from "react";
 interface TrackListProps {
     tracks: TrackMetadata[];
@@ -276,7 +276,11 @@ export function TrackList({ tracks, searchQuery, sortBy, selectedTracks, downloa
                         {track.name}
                       </button>) : (<span className="font-medium">{track.name}</span>)}
                       {track.is_explicit && (<span className="inline-flex items-center justify-center bg-red-600 text-white text-[10px] h-4 w-4 rounded shrink-0" title="Explicit">E</span>)}
-                      {albumId ? <AlbumQualityBadge albumId={albumId} /> : <QualityBadge spotifyId={track.spotify_id} isrc={track.isrc} />}
+                      {/* Per-track probe (not the album pressing): the downloader
+                          grabs the best master of each recording anywhere on the
+                          source, so this shows what will actually download —
+                          e.g. one soundtrack town gets a 24/96 reissue master. */}
+                      <QualityBadge spotifyId={track.spotify_id} isrc={track.isrc} />
 
                       {track.spotify_id && skippedTracks.has(track.spotify_id) ? (<FileCheck className="h-4 w-4 text-yellow-500 shrink-0"/>) : track.spotify_id && downloadedTracks.has(track.spotify_id) ? (<CheckCircle className="h-4 w-4 text-green-500 shrink-0"/>) : track.spotify_id && failedTracks.has(track.spotify_id) ? (<XCircle className="h-4 w-4 text-red-500 shrink-0"/>) : null}
                     </div>
