@@ -823,9 +823,11 @@ func QueryLibrary(q LibraryQuery) ([]LibraryTrack, error) {
 			continue
 		}
 		if f == "artist" {
-			// "appears on": any role in track_artists
-			where = append(where, "id IN (SELECT track_id FROM track_artists WHERE name=?)")
-			args = append(args, v)
+			// "appears on": any role in track_artists; folded-duplicate
+			// spellings (Unicode hyphens) all count.
+			variants := artistNameVariants(v)
+			where = append(where, "id IN (SELECT track_id FROM track_artists WHERE name IN ("+inPlaceholders(len(variants))+"))")
+			args = append(args, artistArgs(variants)...)
 		} else if trackFilterable[f] {
 			where = append(where, f+"=?")
 			args = append(args, v)
@@ -1052,6 +1054,45 @@ func GetLibraryAlbums(search, sort string, desc bool) ([]LibraryAlbum, error) {
 // GetArtistReleases splits an artist's releases into the ones they're the main
 // artist on (Own — grouped client-side by ReleaseType) and the ones they only
 // guest on (AppearsOn).
+// artistFoldKey groups artist spellings that differ only in Unicode
+// punctuation or case - "blink‐182" (U+2010 hyphen) and "blink-182" are the
+// same artist to every human, but tags from different sources disagree.
+func artistFoldKey(name string) string {
+	return normalizeMatch(name)
+}
+
+// artistNameVariants returns every spelling in the library that folds to the
+// same artist as name, so lookups from a merged grid card cover all of them.
+func artistNameVariants(name string) []string {
+	out := []string{name}
+	if libDB == nil {
+		return out
+	}
+	key := artistFoldKey(name)
+	seen := map[string]bool{name: true}
+	rows, err := libDB.Query("SELECT DISTINCT name FROM track_artists WHERE name != ''")
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var n string
+		if rows.Scan(&n) == nil && !seen[n] && artistFoldKey(n) == key {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+func artistArgs(names []string) []any {
+	args := make([]any, len(names))
+	for i, n := range names {
+		args[i] = n
+	}
+	return args
+}
+
 func GetArtistReleases(name, sort string, desc bool) (ArtistReleases, error) {
 	var out ArtistReleases
 	if libDB == nil {
@@ -1060,11 +1101,14 @@ func GetArtistReleases(name, sort string, desc bool) (ArtistReleases, error) {
 	// "Own" = albums where the artist is a primary/album-artist credit OR is the
 	// album-artist field value — so editing the album-artist field actually drives
 	// the grouping (matches by the corrected data, exact case).
-	ownSub := "(SELECT t.album_id FROM tracks t JOIN track_artists ta ON ta.track_id=t.id WHERE ta.name=? AND ta.role IN ('primary','album_artist') UNION SELECT album_id FROM tracks WHERE album_artist=?)"
-	featSub := "(SELECT t.album_id FROM tracks t JOIN track_artists ta ON ta.track_id=t.id WHERE ta.name=? AND ta.role IN ('featuring','collaboration'))"
+	variants := artistNameVariants(name)
+	ph := inPlaceholders(len(variants))
+	ownSub := "(SELECT t.album_id FROM tracks t JOIN track_artists ta ON ta.track_id=t.id WHERE ta.name IN (" + ph + ") AND ta.role IN ('primary','album_artist') UNION SELECT album_id FROM tracks WHERE album_artist IN (" + ph + "))"
+	featSub := "(SELECT t.album_id FROM tracks t JOIN track_artists ta ON ta.track_id=t.id WHERE ta.name IN (" + ph + ") AND ta.role IN ('featuring','collaboration'))"
 	order := " GROUP BY album_id ORDER BY " + albumSort(sort, desc) + " LIMIT 5000"
 
-	rows, err := libDB.Query("SELECT "+albumCols+" FROM tracks WHERE album_id != '' AND album_id IN "+ownSub+order, name, name)
+	va := artistArgs(variants)
+	rows, err := libDB.Query("SELECT "+albumCols+" FROM tracks WHERE album_id != '' AND album_id IN "+ownSub+order, append(append([]any{}, va...), va...)...)
 	if err != nil {
 		return out, err
 	}
@@ -1075,7 +1119,7 @@ func GetArtistReleases(name, sort string, desc bool) (ArtistReleases, error) {
 	}
 	out.Own = own
 
-	rows, err = libDB.Query("SELECT "+albumCols+" FROM tracks WHERE album_id != '' AND album_id IN "+featSub+" AND album_id NOT IN "+ownSub+order, name, name, name)
+	rows, err = libDB.Query("SELECT "+albumCols+" FROM tracks WHERE album_id != '' AND album_id IN "+featSub+" AND album_id NOT IN "+ownSub+order, append(append(append([]any{}, va...), va...), va...)...)
 	if err != nil {
 		return out, err
 	}
@@ -1179,14 +1223,31 @@ func GetLibraryArtistsList(search, sort string, desc bool) ([]LibraryArtist, err
 		return nil, err
 	}
 	defer rows.Close()
+	// Fold spellings that differ only in Unicode punctuation into one card;
+	// the most common spelling is the display name.
 	out := []LibraryArtist{}
+	index := map[string]int{}
+	best := []int{}
 	for rows.Next() {
 		var a LibraryArtist
 		if err := rows.Scan(&a.Name, &a.TrackCount, &a.CoverPath); err != nil {
 			return nil, err
 		}
+		key := artistFoldKey(a.Name)
+		if i, ok := index[key]; ok {
+			out[i].TrackCount += a.TrackCount
+			if a.TrackCount > best[i] {
+				out[i].Name = a.Name
+				out[i].CoverPath = a.CoverPath
+				best[i] = a.TrackCount
+			}
+			continue
+		}
+		index[key] = len(out)
+		best = append(best, a.TrackCount)
 		out = append(out, a)
 	}
+	resortArtists(out, sort, desc)
 	return out, nil
 }
 
@@ -1592,22 +1653,37 @@ func GetLibraryAlbumArtists(search, sort string, desc bool) ([]LibraryArtist, er
 	// combined artist card. Merged counts keep the grid's requested order.
 	out := []LibraryArtist{}
 	index := map[string]int{}
+	best := []int{}
 	for rows.Next() {
 		var a LibraryArtist
 		if err := rows.Scan(&a.Name, &a.TrackCount, &a.CoverPath); err != nil {
 			return nil, err
 		}
 		for _, name := range splitArtists(a.Name) {
-			if i, ok := index[normKey(name)]; ok {
+			// Folded key also merges Unicode-punctuation spelling variants
+			// ("blink‐182" vs "blink-182") into one card.
+			key := artistFoldKey(name)
+			if i, ok := index[key]; ok {
 				out[i].TrackCount += a.TrackCount
+				if a.TrackCount > best[i] {
+					out[i].Name = name
+					out[i].CoverPath = a.CoverPath
+					best[i] = a.TrackCount
+				}
 				continue
 			}
-			index[normKey(name)] = len(out)
+			index[key] = len(out)
+			best = append(best, a.TrackCount)
 			out = append(out, LibraryArtist{Name: name, TrackCount: a.TrackCount, CoverPath: a.CoverPath})
 		}
 	}
-	// Merging split credits can change counts/positions — re-apply the
-	// requested order on the merged list.
+	// Merging can change counts/positions - re-apply the requested order.
+	resortArtists(out, sort, desc)
+	return out, nil
+}
+
+// resortArtists re-applies a grid's requested order after merge passes.
+func resortArtists(out []LibraryArtist, sort string, desc bool) {
 	nameLess := func(i, j int) bool {
 		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
 	}
@@ -1630,7 +1706,6 @@ func GetLibraryAlbumArtists(search, sort string, desc bool) ([]LibraryArtist, er
 			return nameLess(i, j)
 		})
 	}
-	return out, nil
 }
 
 var (

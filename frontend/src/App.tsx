@@ -28,7 +28,7 @@ import { LyricsManagerPage } from "@/components/LyricsManagerPage";
 import { SettingsPage } from "@/components/SettingsPage";
 import { DebugLoggerPage } from "@/components/DebugLoggerPage";
 import { PlayerBar } from "@/components/PlayerBar";
-import { usePlayer } from "@/lib/player";
+import { usePlayer, toggle, hasCurrentTrack } from "@/lib/player";
 import { useDownload } from "@/hooks/useDownload";
 import { useMetadata } from "@/hooks/useMetadata";
 import { useLyrics } from "@/hooks/useLyrics";
@@ -72,9 +72,37 @@ function App() {
                 if (getSettings().autoCheckUpdates === false) return;
                 const info = await (window as any)["go"]["main"]["App"]["CheckForUpdate"]();
                 if (info?.available) setUpdateInfo(info);
-            } catch { /* offline or rate-limited — try again next launch */ }
+            } catch { /* offline or rate-limited - try again next launch */ }
         }, 6000);
-        return () => window.clearTimeout(t);
+        // Manual re-check (Settings -> Check now) - the startup prompt is
+        // dismissable, so there has to be a second chance that isn't
+        // "restart the app".
+        const onManualCheck = async () => {
+            try {
+                const info = await (window as any)["go"]["main"]["App"]["CheckForUpdate"]();
+                if (info?.available) setUpdateInfo(info);
+                else toast.success(`You're on the latest version (v${info?.current_version || ""})`);
+            } catch (err) {
+                toast.error(`Update check failed: ${err}`);
+            }
+        };
+        window.addEventListener("kazoo:check-updates", onManualCheck);
+        return () => { window.clearTimeout(t); window.removeEventListener("kazoo:check-updates", onManualCheck); };
+    }, []);
+    // Space = play/pause whenever the app has focus (not just the player
+    // controls), except while typing. Also stops space from re-triggering
+    // whatever button happens to keep focus after a click.
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.code !== "Space" || e.repeat) return;
+            const t = e.target as HTMLElement | null;
+            if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+            if (!hasCurrentTrack()) return;
+            e.preventDefault();
+            toggle();
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
     }, []);
     const applyUpdate = async () => {
         if (!updateInfo?.asset_url || isApplyingUpdate) return;

@@ -215,11 +215,23 @@ func TrackIDsForArtists(names []string) ([]int64, error) {
 	if libDB == nil || len(names) == 0 {
 		return nil, nil
 	}
-	args := make([]any, len(names))
-	for i, n := range names {
+	// Expand folded spelling variants (Unicode hyphens etc.) so an action on
+	// a merged artist card covers every spelling.
+	seen := map[string]bool{}
+	var all []string
+	for _, n := range names {
+		for _, v := range artistNameVariants(n) {
+			if !seen[v] {
+				seen[v] = true
+				all = append(all, v)
+			}
+		}
+	}
+	args := make([]any, len(all))
+	for i, n := range all {
 		args[i] = n
 	}
-	return scanIDs("SELECT DISTINCT track_id FROM track_artists WHERE name IN ("+inPlaceholders(len(names))+")", args)
+	return scanIDs("SELECT DISTINCT track_id FROM track_artists WHERE name IN ("+inPlaceholders(len(all))+")", args)
 }
 
 func scanIDs(query string, args []any) ([]int64, error) {

@@ -256,6 +256,12 @@ export function moveInQueue(from: number, to: number) {
     preloadNext(index);
 }
 
+// Whether anything is loaded — the global spacebar handler only hijacks the
+// key when there is something to play/pause.
+export function hasCurrentTrack(): boolean {
+    return current() !== null;
+}
+
 export function toggle() {
     if (!current()) return;
     if (act().paused) void act().play();

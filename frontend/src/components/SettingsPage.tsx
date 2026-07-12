@@ -389,6 +389,10 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                 <Label htmlFor="auto-check-updates" className="cursor-pointer text-sm font-normal">
                   Check for Updates on Launch
                 </Label>
+                <Button variant="outline" size="sm" className="ml-auto h-7 px-2.5 text-xs"
+                    onClick={() => window.dispatchEvent(new CustomEvent("kazoo:check-updates"))}>
+                  Check now
+                </Button>
               </div>
             </div>
 
