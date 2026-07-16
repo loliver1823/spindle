@@ -320,6 +320,14 @@ func IsFFprobeInstalled() (bool, error) {
 }
 
 func IsFFmpegInstalled() (bool, error) {
+	// Android can't run FFmpeg at all: apps may only execute code shipped
+	// inside the APK, so a downloaded binary would be blocked by the OS.
+	// Report "nothing to install" — everything essential (downloads,
+	// tagging, FLAC playback) is pure Go; transcode/waveform/converter
+	// features degrade gracefully at point of use.
+	if runtime.GOOS == "android" {
+		return true, nil
+	}
 	if _, err := GetFFmpegPath(); err != nil {
 		return false, nil
 	}
@@ -408,6 +416,9 @@ func getFFmpegDownloadURLs() ([]string, []string, error) {
 }
 
 func DownloadFFmpeg(progressCallback func(int)) error {
+	if runtime.GOOS == "android" {
+		return fmt.Errorf("FFmpeg can't be installed on Android — the OS only allows executing code bundled in the app")
+	}
 
 	SetDownloadProgress(0)
 	SetDownloadSpeed(0)
