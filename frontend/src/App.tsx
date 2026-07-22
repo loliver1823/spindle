@@ -89,6 +89,22 @@ function App() {
         window.addEventListener("kazoo:check-updates", onManualCheck);
         return () => { window.clearTimeout(t); window.removeEventListener("kazoo:check-updates", onManualCheck); };
     }, []);
+    // Community download verification: the backend opens the challenge in
+    // the system browser; this toast is the fallback path (popup blocked,
+    // or serve mode where the backend can't open one).
+    useEffect(() => {
+        EventsOn("community:verify", (url: string) => {
+            toast.info("One-time download verification needed", {
+                description: "Complete the quick check in your browser so downloads can continue.",
+                duration: 30000,
+                action: { label: "Open", onClick: () => { const w = window.open(url, "_blank"); if (!w) window.location.href = url; } },
+            });
+        });
+        EventsOn("community:verified", () => {
+            toast.success("Verification complete - downloads unlocked");
+        });
+        return () => { EventsOff("community:verify"); EventsOff("community:verified"); };
+    }, []);
     // Space = play/pause whenever the app has focus (not just the player
     // controls), except while typing. Also stops space from re-triggering
     // whatever button happens to keep focus after a click.

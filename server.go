@@ -225,7 +225,12 @@ const wailsShimJS = `(function () {
     WindowFullscreen: function () {},
     WindowUnfullscreen: function () {},
     Quit: function () {},
-    BrowserOpenURL: function (u) { window.open(u, '_blank'); },
+    BrowserOpenURL: function (u) {
+        // Android WebView: window.open is a no-op; a top-frame navigation
+        // is intercepted by the shell and sent to the system browser.
+        var w = window.open(u, '_blank');
+        if (!w) { window.location.href = u; }
+    },
     ClipboardSetText: function (t) { if (navigator.clipboard) navigator.clipboard.writeText(t); return Promise.resolve(true); },
     ClipboardGetText: function () { return navigator.clipboard ? navigator.clipboard.readText() : Promise.resolve(''); },
     Environment: function () { return Promise.resolve({ platform: 'server', arch: '', buildType: 'production' }); },

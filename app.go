@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 
 	"net/http"
+	"os/exec"
+	goruntime "runtime"
 	"strings"
 	"sync"
 	"time"
@@ -259,6 +261,29 @@ func (a *App) GetCurrentIPInfo() (string, error) {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
+	// Community downloads need a one-time browser verification (v7.2.0
+	// protocol). Desktop opens the system browser directly; serve mode
+	// (browser/Android) additionally gets an event so the frontend can
+	// open it — the Android shell routes external URLs to the system
+	// browser, and the callback lands on this process's localhost.
+	backend.SetCommunityVerificationHandlers(
+		func(target string) {
+			if !a.serveMode && a.ctx != nil {
+				runtime.BrowserOpenURL(a.ctx, target)
+			} else {
+				openSystemBrowser(target)
+			}
+			a.emit("community:verify", target)
+		},
+		func() {
+			if !a.serveMode && a.ctx != nil {
+				runtime.WindowShow(a.ctx)
+				runtime.WindowUnminimise(a.ctx)
+			}
+			a.emit("community:verified")
+		},
+	)
+
 	if err := backend.InitHistoryDB("Spindle"); err != nil {
 		backend.Dbgf("Failed to init history DB: %v\n", err)
 	}
@@ -290,6 +315,21 @@ func (a *App) startup(ctx context.Context) {
 func (a *App) shutdown(ctx context.Context) {
 	backend.CloseHistoryDB()
 	backend.CloseISRCCacheDB()
+}
+
+// openSystemBrowser opens a URL in the default browser without the Wails
+// runtime — used in serve mode. On Android there is no shell opener; the
+// WebView shell handles the community:verify event instead.
+func openSystemBrowser(target string) {
+	switch goruntime.GOOS {
+	case "windows":
+		_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", target).Start()
+	case "darwin":
+		_ = exec.Command("open", target).Start()
+	case "android":
+	default:
+		_ = exec.Command("xdg-open", target).Start()
+	}
 }
 
 // EnqueueDownload adds a metadata-rich item to the download queue; the
