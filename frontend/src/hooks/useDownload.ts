@@ -84,6 +84,12 @@ export function useDownload() {
     const [downloadProgress, setDownloadProgress] = useState<number>(0);
     const [downloadRemainingCount, setDownloadRemainingCount] = useState<number>(0);
     const [isDownloading, setIsDownloading] = useState(false);
+    // isEnqueuing: true only while a batch is being handed to the queue (the
+    // brief synchronous enqueue loop). Buttons key their disabled/spinner
+    // state off THIS, not isDownloading — the queue processes in the
+    // background (and may be paused on a server break), so a download in
+    // flight must never stop you from queueing more.
+    const [isEnqueuing, setIsEnqueuing] = useState(false);
     const [downloadingTrack, setDownloadingTrack] = useState<string | null>(null);
     const [bulkDownloadType, setBulkDownloadType] = useState<"all" | "selected" | null>(null);
     const [downloadedTracks, setDownloadedTracks] = useState<Set<string>>(new Set());
@@ -253,17 +259,22 @@ export function useDownload() {
         }
         logger.info(`queueing batch: ${withIds.length} tracks`);
         setBulkDownloadType(kind);
+        setIsEnqueuing(true);
         setIsDownloading(true);
         setDownloadProgress(0);
         setDownloadRemainingCount(withIds.length);
         batchRef.current = { folderName, total: withIds.length };
-        for (let i = 0; i < withIds.length; i++) {
-            try {
-                const itemID = await enqueue(trackMetaToEnqueue(withIds[i], i + 1, true));
-                trackedRef.current.set(itemID, withIds[i].spotify_id || "");
-            } catch (err) {
-                logger.error(`failed to queue ${withIds[i].name}: ${err}`);
+        try {
+            for (let i = 0; i < withIds.length; i++) {
+                try {
+                    const itemID = await enqueue(trackMetaToEnqueue(withIds[i], i + 1, true));
+                    trackedRef.current.set(itemID, withIds[i].spotify_id || "");
+                } catch (err) {
+                    logger.error(`failed to queue ${withIds[i].name}: ${err}`);
+                }
             }
+        } finally {
+            setIsEnqueuing(false);
         }
         ensurePolling();
         toast.info(`${withIds.length} track${withIds.length === 1 ? "" : "s"} added to the queue`);
@@ -312,6 +323,7 @@ export function useDownload() {
         downloadProgress,
         downloadRemainingCount,
         isDownloading,
+        isEnqueuing,
         downloadingTrack,
         bulkDownloadType,
         downloadedTracks,

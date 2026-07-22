@@ -53,6 +53,7 @@ interface ArtistInfoProps {
     skippedTracks: Set<string>;
     downloadingTrack: string | null;
     isDownloading: boolean;
+    isEnqueuing: boolean;
     bulkDownloadType: "all" | "selected" | null;
     downloadProgress: number;
     downloadRemainingCount: number;
@@ -104,7 +105,7 @@ interface ArtistInfoProps {
     onTrackClick?: (track: TrackMetadata) => void;
     onBack?: () => void;
 }
-export function ArtistInfo({ artistInfo, albumList, trackList, onBrowseQobuz, searchQuery, sortBy, selectedTracks, downloadedTracks, failedTracks, skippedTracks, downloadingTrack, isDownloading, bulkDownloadType, downloadProgress, downloadRemainingCount, currentDownloadInfo, currentPage, itemsPerPage, downloadedLyrics, failedLyrics, skippedLyrics, downloadingLyricsTrack, checkingAvailabilityTrack, availabilityMap, downloadedCovers, failedCovers, skippedCovers, downloadingCoverTrack, isBulkDownloadingCovers, isBulkDownloadingLyrics, isMetadataLoading = false, onSearchChange, onSortChange, onToggleTrack, onToggleSelectAll, onSelectTrackRange, onDownloadTrack, onDownloadLyrics, onDownloadCover, onCheckAvailability, onDownloadAllLyrics, onDownloadAllCovers, onDownloadAll, onDownloadSelected, onStopDownload, onOpenFolder, onAlbumClick, onArtistClick, onPageChange, onTrackClick, onBack, }: ArtistInfoProps) {
+export function ArtistInfo({ artistInfo, albumList, trackList, onBrowseQobuz, searchQuery, sortBy, selectedTracks, downloadedTracks, failedTracks, skippedTracks, downloadingTrack, isDownloading, isEnqueuing, bulkDownloadType, downloadProgress, downloadRemainingCount, currentDownloadInfo, currentPage, itemsPerPage, downloadedLyrics, failedLyrics, skippedLyrics, downloadingLyricsTrack, checkingAvailabilityTrack, availabilityMap, downloadedCovers, failedCovers, skippedCovers, downloadingCoverTrack, isBulkDownloadingCovers, isBulkDownloadingLyrics, isMetadataLoading = false, onSearchChange, onSortChange, onToggleTrack, onToggleSelectAll, onSelectTrackRange, onDownloadTrack, onDownloadLyrics, onDownloadCover, onCheckAvailability, onDownloadAllLyrics, onDownloadAllCovers, onDownloadAll, onDownloadSelected, onStopDownload, onOpenFolder, onAlbumClick, onArtistClick, onPageChange, onTrackClick, onBack, }: ArtistInfoProps) {
     const [downloadingHeader, setDownloadingHeader] = useState(false);
     const [downloadingAvatar, setDownloadingAvatar] = useState(false);
     const [downloadingGalleryIndex, setDownloadingGalleryIndex] = useState<number | null>(null);
@@ -552,12 +553,12 @@ export function ArtistInfo({ artistInfo, albumList, trackList, onBrowseQobuz, se
                     <CheckCheck className="h-4 w-4"/>
                     {allDiscographySelected ? "Deselect All" : "Select All"}
                 </Button>)}
-                <Button onClick={onDownloadAll} size="sm" disabled={isDownloading && bulkDownloadType === "all"}>
-                    {isDownloading && bulkDownloadType === "all" ? (<Spinner />) : (<Download className="h-4 w-4"/>)}
+                <Button onClick={onDownloadAll} size="sm" disabled={isEnqueuing && bulkDownloadType === "all"}>
+                    {isEnqueuing && bulkDownloadType === "all" ? (<Spinner />) : (<Download className="h-4 w-4"/>)}
                     Download Discography
                 </Button>
-                {selectedTracks.length > 0 && (<Button onClick={onDownloadSelected} size="sm" variant="secondary" disabled={isDownloading && bulkDownloadType === "selected"}>
-                        {isDownloading && bulkDownloadType === "selected" ? (<Spinner />) : (<Download className="h-4 w-4"/>)}
+                {selectedTracks.length > 0 && (<Button onClick={onDownloadSelected} size="sm" variant="secondary" disabled={isEnqueuing && bulkDownloadType === "selected"}>
+                        {isEnqueuing && bulkDownloadType === "selected" ? (<Spinner />) : (<Download className="h-4 w-4"/>)}
                         Download Selected ({selectedTracks.length.toLocaleString()})
                     </Button>)}
             </div>
@@ -689,12 +690,12 @@ export function ArtistInfo({ artistInfo, albumList, trackList, onBrowseQobuz, se
                       </ScrollArea>
                   </DialogContent>
               </Dialog>
-              <Button onClick={onDownloadAll} size="sm" disabled={isDownloading && bulkDownloadType === "all"}>
-                {isDownloading && bulkDownloadType === "all" ? (<Spinner />) : (<Download className="h-4 w-4"/>)}
+              <Button onClick={onDownloadAll} size="sm" disabled={isEnqueuing && bulkDownloadType === "all"}>
+                {isEnqueuing && bulkDownloadType === "all" ? (<Spinner />) : (<Download className="h-4 w-4"/>)}
                 Download All
               </Button>
-              {selectedTracks.length > 0 && (<Button onClick={onDownloadSelected} size="sm" variant="secondary" disabled={isDownloading && bulkDownloadType === "selected"}>
-                  {isDownloading && bulkDownloadType === "selected" ? (<Spinner />) : (<Download className="h-4 w-4"/>)}
+              {selectedTracks.length > 0 && (<Button onClick={onDownloadSelected} size="sm" variant="secondary" disabled={isEnqueuing && bulkDownloadType === "selected"}>
+                  {isEnqueuing && bulkDownloadType === "selected" ? (<Spinner />) : (<Download className="h-4 w-4"/>)}
                   Download Selected ({selectedTracks.length.toLocaleString()})
                 </Button>)}
               {onDownloadAllLyrics && (<Tooltip>
